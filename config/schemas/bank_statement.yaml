@@ -31,8 +31,13 @@ fields:
     type: array
     required: false
     items:
-      - date: date
-      - description: string
-      - debit: float
-      - credit: float
-      - balance: float
+      - name: date
+        type: date
+      - name: description
+        type: string
+      - name: debit
+        type: float
+      - name: credit
+        type: float
+      - name: balance
+        type: float
