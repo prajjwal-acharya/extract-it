@@ -12,7 +12,7 @@ def _make_state(**overrides) -> GraphState:
         "extracted_fields": {"surname": "SMITH", "given_names": "JOHN"},
         "validation_issues": ["passport_number: field required"],
     }
-    return {**base, **overrides}  # type: ignore[return-value]
+    return {**base, **overrides}  # type: ignore[return-value,typeddict-item]
 
 
 def test_hitl_approval_routes_to_normalize() -> None:
