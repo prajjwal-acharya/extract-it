@@ -13,7 +13,7 @@ test-live:
 	pytest tests/ -v
 
 migrate:
-	alembic -c infra/migrations/alembic.ini upgrade head
+	docker compose exec app alembic -c infra/migrations/alembic.ini upgrade head
 
 seed:
 	python scripts/seed_db.py

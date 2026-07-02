@@ -1,5 +1,4 @@
 from langgraph.graph import StateGraph
-from pipelines.state import GraphState
 
 
 def build_graph() -> StateGraph:
