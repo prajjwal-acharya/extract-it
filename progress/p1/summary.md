@@ -22,8 +22,7 @@ All pipeline/LLM logic remains stubbed — P1 ends at `status="queued"`.
 | FastAPI app | `/health → {"status":"ok"}`, `/ingest/` accepts PDF upload | ✅ up |
 | Alembic | Migration `0001_da5070439f01_create_core_tables.py` applied, all 4 tables exist | ✅ verified |
 
-**Note:** Local Postgres (PID 753) and Docker Postgres both bind to port 5432.
-Alembic migrations must run via `docker exec extract-it-app-1` using `DATABASE_URL=postgresql+psycopg://user:password@postgres:5432/docint` (service-name resolution inside the Docker network).
+**`make migrate` works host-side** via `docker compose exec app alembic ...`. `docker-compose.yml` overrides `DATABASE_URL` and `MINIO_ENDPOINT` for the `app`/`frontend` services to use Docker-internal service names (`postgres:5432`, `minio:9000`); `.env` localhost defaults remain for host-side tooling.
 
 ---
 
@@ -43,6 +42,10 @@ Alembic migrations must run via `docker exec extract-it-app-1` using `DATABASE_U
 | `tests/unit/test_io_pipeline.py` | 3 ingest tests unstubbed; `write_output_*` remain stubs |
 | `tests/unit/test_api.py` | 4 target tests unstubbed; query endpoint tests remain stubs |
 | `tests/integration/test_p1_p2_ingest.py` | 2 tests unstubbed; `test_ingest_file_enqueues_pipeline_run` remains stub (P2 scope) |
+| `.gitignore` | Removed `infra/migrations/versions/*.py` rule — was blocking all migration files from being tracked |
+| `Makefile` | `migrate` target now runs via `docker compose exec app` instead of host-side alembic |
+| `docker-compose.yml` | `app` and `frontend` services override `DATABASE_URL`/`MINIO_ENDPOINT` to internal service names |
+| `pipelines/graph.py` | Removed unused `GraphState` import (pre-existing ruff F401) |
 
 ---
 
@@ -92,7 +95,7 @@ Zero import errors, zero collection errors.
 | Rename temp file to original filename before `ingest_file()` | `ingest_file()` reads `basename(file_path)` for both the object key and regex parsing; NamedTemporaryFile suffix alone is insufficient for regex match |
 | `minio_client` fixture: testcontainers `MinioContainer`, unique bucket prefix | Avoids dev MinIO pollution; simpler than shared state cleanup. Patches `settings` in-place rather than env-var substitution (pydantic-settings re-reads from env on `Settings()` init, but the singleton `settings` object is already constructed) |
 | `postgres_session` fixture: `pgvector/pgvector:pg16` image, `CREATE EXTENSION vector` before `create_all` | Must match production image; `create_all` would fail on the `Vector(768)` column type without the extension |
-| Migration run via `docker exec` inside app container | Local macOS has a conflicting Postgres on localhost:5432; Docker Postgres is accessible inside the compose network as `postgres:5432` |
+| `make migrate` via `docker compose exec app` | Local macOS has a conflicting Postgres on localhost:5432; fixed by routing through the compose network (`postgres:5432`) and overriding service URLs in `docker-compose.yml` |
 | `pgvector.sqlalchemy` import added to migration file | Alembic autogenerate emits the type reference but omits the import; hand-fix required |
 | `get_db()` returns `Generator` not bare `Session` | FastAPI's dependency injection system requires a generator (yield) to guarantee session close even on exceptions |
 | `test_gemini_model_default` asserts `startswith("gemini-")` not a specific version | Shell env has `GEMINI_MODEL=gemini-2.5-flash-lite` which overrides `.env`; pinning to `gemini-2.0-flash` would make the test environment-dependent |
