@@ -1,0 +1,38 @@
+doc_type: bank_statement
+version: "1.0"
+fields:
+  - name: account_holder
+    type: string
+    required: true
+  - name: account_number
+    type: string
+    required: true
+  - name: bank_name
+    type: string
+    required: true
+  - name: statement_period_start
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: statement_period_end
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: opening_balance
+    type: float
+    required: true
+  - name: closing_balance
+    type: float
+    required: true
+  - name: currency
+    type: string
+    required: true
+  - name: transactions
+    type: array
+    required: false
+    items:
+      - date: date
+      - description: string
+      - debit: float
+      - credit: float
+      - balance: float

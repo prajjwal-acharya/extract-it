@@ -1,0 +1,19 @@
+services:
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    ports:
+      - "8085:8085"
+    environment:
+      PUBSUB_EMULATOR_HOST: localhost:8085
+
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    command: -scheme http -port 4443
+    ports:
+      - "4443:4443"
+    volumes:
+      - gcsdata:/storage
+
+volumes:
+  gcsdata:

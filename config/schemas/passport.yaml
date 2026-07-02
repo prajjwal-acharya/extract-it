@@ -1,0 +1,40 @@
+doc_type: passport
+version: "1.0"
+fields:
+  - name: surname
+    type: string
+    required: true
+  - name: given_names
+    type: string
+    required: true
+  - name: nationality
+    type: string
+    required: true
+  - name: date_of_birth
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: sex
+    type: string
+    enum: [M, F, X]
+    required: true
+  - name: place_of_birth
+    type: string
+    required: false
+  - name: date_of_issue
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: date_of_expiry
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: passport_number
+    type: string
+    required: true
+  - name: mrz_line1
+    type: string
+    required: false
+  - name: mrz_line2
+    type: string
+    required: false
