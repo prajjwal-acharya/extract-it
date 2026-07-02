@@ -38,7 +38,7 @@ Goal: working local infra + all data contracts locked so every later phase has a
 - `infra/docker/install_deps.py` — parses `pyproject.toml` with `tomllib`, installs all deps inside the image without triggering hatchling's editable-install path
 
 ### Project config
-- `pyproject.toml` — full dep list: `fastapi`, `langgraph`, `langgraph-checkpoint-postgres`, `langsmith`, `google-generativeai`, `psycopg[binary]`, `pgvector`, `minio`, `pypdf`, `streamlit`, `watchdog`, `pyyaml`; dev: `pytest`, `pytest-asyncio`, `httpx`, `vcrpy`, `respx`, `testcontainers[postgresql]`, `ruff`, `mypy`
+- `pyproject.toml` — full dep list: `fastapi`, `langgraph`, `langgraph-checkpoint-postgres`, `langsmith`, `google-genai`, `psycopg[binary]`, `pgvector`, `minio`, `pypdf`, `streamlit`, `watchdog`, `pyyaml`; dev: `pytest`, `pytest-asyncio`, `httpx`, `vcrpy`, `respx`, `testcontainers[postgresql]`, `ruff`, `mypy`
 - `.env.example` — all env vars with local defaults; `GEMINI_MODEL=gemini-2.0-flash`
 - `.gitignore`
 - `Makefile` — `up / down / test / test-live / migrate / seed / lint / gcp-sim`
@@ -142,7 +142,7 @@ Goal: working local infra + all data contracts locked so every later phase has a
 | `gemini-2.0-flash` as default | Confirmed current stable model as of P0 (2026-07-02) |
 | `TypedDict` not `Pydantic BaseModel` for state | LangGraph requires TypedDict for its state merging machinery |
 | Only `extracted_fields` + `validation_issues` are `Annotated` | These are the only two fields rewritten across OP-A retry iterations; classify/extract write to different keys so no fan-out conflict |
-| `google-generativeai` not `google-cloud-aiplatform` | Project uses direct Gemini API (`import google.generativeai`); Vertex AI SDK is a 400 MB install that is never called |
+| `google-genai` not `google-cloud-aiplatform` | Project uses direct Gemini API; Vertex AI SDK is a 400 MB install that is never called. `google-generativeai` reached EOL Nov 30, 2025 — replaced with unified `google-genai>=1.0.0`. New pattern: `from google import genai; client = genai.Client(api_key=...)` |
 | Separate `ExtractionResult` table | Supports multiple extraction attempts per document (retries) without overwriting |
 | Deps installed via `install_deps.py` in Dockerfile | Hatchling's editable install fails on a non-src layout; this extracts deps from `pyproject.toml` via `tomllib` cleanly |
 

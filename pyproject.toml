@@ -25,7 +25,7 @@ dependencies = [
     # Observability
     "langsmith>=0.1.0",
     # LLM — Gemini direct SDK
-    "google-generativeai>=0.8.0",
+    "google-genai>=1.0.0",
     # GCP client libs (dormant until P9)
     "google-cloud-storage>=2.17.0",
     "google-cloud-pubsub>=2.21.0",
