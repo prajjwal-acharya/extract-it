@@ -1,15 +1,32 @@
+from pydantic import ValidationError
+
 from agents.base import AgentResult
+from config.schema_loader import load_schema_model
+from config.settings import settings
 
 
 def validate(doc_type: str, extracted_fields: dict) -> AgentResult:
-    """Validate extracted fields for completeness, format, and logical consistency.
+    """Validate extracted fields against the doc_type's YAML schema.
 
-    Sends the extracted fields to Gemini with a validation prompt and returns
-    a confidence score plus a list of discovered issues.
+    Confidence = 1 - (failing_field_count / total_schema_fields).
+    No LLM call — deterministic, cheap, reuses the already-built schema model.
     """
-    raise NotImplementedError
+    try:
+        model = load_schema_model(doc_type)
+    except FileNotFoundError as e:
+        return AgentResult(success=False, confidence=0.0, data={"issues": [str(e)]}, reason=str(e))
+
+    fields_to_check = {k: v for k, v in extracted_fields.items() if k != "confidence"}
+    try:
+        model(**fields_to_check, confidence=0.0)
+        return AgentResult(success=True, confidence=1.0, data={"issues": []})
+    except ValidationError as e:
+        issues = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
+        total = len(model.model_fields) - 1  # exclude injected confidence field
+        confidence = max(0.0, 1 - len(issues) / total) if total else 0.0
+        return AgentResult(success=False, confidence=confidence, data={"issues": issues})
 
 
 def meets_threshold(confidence: float) -> bool:
     """Return True if confidence meets or exceeds the configured CONFIDENCE_THRESHOLD."""
-    raise NotImplementedError
+    return confidence >= settings.CONFIDENCE_THRESHOLD

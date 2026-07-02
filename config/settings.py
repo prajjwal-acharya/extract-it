@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     LANGCHAIN_PROJECT: str = "doc-intel-platform"
 
     CONFIDENCE_THRESHOLD: float = 0.85
+    MAX_RETRIES: int = 2
 
 
 settings = Settings()

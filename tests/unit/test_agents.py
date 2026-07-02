@@ -4,6 +4,7 @@ from agents.base import AgentResult
 from agents.classify_agent import classify
 from agents.extract_agent import extract
 from agents.llm_client import generate
+from agents.validate_agent import meets_threshold, validate
 
 
 def test_classify_returns_agent_result(sample_pdf_bytes) -> None:
@@ -52,11 +53,17 @@ def test_extract_returns_failure_for_unknown_doc_type(sample_pdf_bytes) -> None:
 
 
 def test_validate_returns_issues_for_invalid_fields() -> None:
-    raise NotImplementedError
+    # Missing all required passport fields — should produce issues
+    result = validate("passport", {"surname": "SMITH"})
+    assert isinstance(result.data.get("issues"), list)
+    assert len(result.data["issues"]) > 0
+    assert result.confidence < 1.0
 
 
 def test_validate_meets_threshold_true_above_threshold() -> None:
-    raise NotImplementedError
+    assert meets_threshold(0.95) is True
+    assert meets_threshold(0.85) is True  # exactly at threshold
+    assert meets_threshold(0.84) is False
 
 
 def test_generate_returns_string() -> None:

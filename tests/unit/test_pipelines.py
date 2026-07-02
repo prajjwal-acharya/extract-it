@@ -1,8 +1,9 @@
 import operator
 import typing
 
-from pipelines.state import GraphState
 from pipelines.nodes.master import master_node
+from pipelines.router import route_after_validate
+from pipelines.state import GraphState
 
 
 def test_graph_state_is_valid_typed_dict() -> None:
@@ -48,15 +49,27 @@ def test_normalize_node_produces_universal_schema() -> None:
 
 
 def test_router_routes_to_normalize_above_threshold() -> None:
-    raise NotImplementedError
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "validate_confidence": 0.95,
+        "retry_count": 0,
+    }
+    assert route_after_validate(state) == "normalize"
 
 
 def test_router_routes_to_retry_when_retries_remain() -> None:
-    raise NotImplementedError
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "validate_confidence": 0.50,
+        "retry_count": 0,
+    }
+    assert route_after_validate(state) == "op_a_retry"
 
 
 def test_router_routes_to_hitl_when_retries_exhausted() -> None:
-    raise NotImplementedError
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "validate_confidence": 0.50,
+        "retry_count": 2,  # == MAX_RETRIES
+    }
+    assert route_after_validate(state) == "op_b_hitl"
 
 
 def test_build_graph_returns_state_graph() -> None:
