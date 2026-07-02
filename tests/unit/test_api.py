@@ -1,3 +1,4 @@
+import os
 import unittest.mock as mock
 
 import pytest
@@ -38,6 +39,40 @@ def test_ingest_endpoint_accepts_pdf_upload(client, sample_pdf_bytes, minio_clie
 def test_ingest_endpoint_rejects_missing_file(client) -> None:
     resp = client.post("/ingest/")
     assert resp.status_code == 422
+
+
+def test_ingest_rejects_path_traversal_filename(client, sample_pdf_bytes) -> None:
+    """CWE-22: directory components in the filename must not escape the temp dir."""
+    malicious_names = [
+        "../../../etc/cron.d/evil",
+        "/etc/passwd",
+        "..\\..\\windows\\system32\\evil.exe",
+    ]
+    import tempfile
+    tmp_dir = tempfile.gettempdir()
+
+    for name in malicious_names:
+        with mock.patch("api.routes.ingest.ingest_file", return_value="safe-id") as m:
+            resp = client.post(
+                "/ingest/",
+                files={"file": (name, sample_pdf_bytes, "application/pdf")},
+            )
+        assert resp.status_code == 200, f"Unexpected status for filename {name!r}"
+        called_path: str = m.call_args[0][0]
+        # The file must land inside the temp directory, not at an arbitrary path.
+        assert os.path.dirname(called_path) == tmp_dir, (
+            f"Path traversal: {called_path!r} escaped temp dir for filename {name!r}"
+        )
+
+
+def test_ingest_rejects_oversized_upload(client) -> None:
+    """Uploads exceeding MAX_UPLOAD_BYTES (25 MB) must return 413."""
+    oversized = b"x" * (25 * 1024 * 1024 + 1)
+    resp = client.post(
+        "/ingest/",
+        files={"file": ("big.pdf", oversized, "application/pdf")},
+    )
+    assert resp.status_code == 413
 
 
 def test_query_endpoint_returns_answer_and_sources() -> None:
