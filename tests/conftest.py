@@ -97,23 +97,25 @@ def sample_pdf_bytes() -> bytes:
 
 @pytest.fixture
 def passport_state(minio_client, sample_pdf_bytes) -> dict:
-    """Return a pre-populated GraphState dict for a passport document."""
+    """Return a pre-populated GraphState dict for a passport document (post-master_node)."""
     minio_client.put("raw/passport_P001_20240101.pdf", sample_pdf_bytes, "application/pdf")
     return {
         "document_id": "test-doc-passport",
         "filename": "passport_P001_20240101.pdf",
         "object_key": "raw/passport_P001_20240101.pdf",
         "doc_type": "passport",
+        "raw_bytes": sample_pdf_bytes,
     }
 
 
 @pytest.fixture
 def bank_statement_state(minio_client, sample_pdf_bytes) -> dict:
-    """Return a pre-populated GraphState dict for a bank statement document."""
+    """Return a pre-populated GraphState dict for a bank statement document (post-master_node)."""
     minio_client.put("raw/bank_statement_A001_20240101.pdf", sample_pdf_bytes, "application/pdf")
     return {
         "document_id": "test-doc-bank",
         "filename": "bank_statement_A001_20240101.pdf",
         "object_key": "raw/bank_statement_A001_20240101.pdf",
         "doc_type": "bank_statement",
+        "raw_bytes": sample_pdf_bytes,
     }

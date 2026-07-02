@@ -18,7 +18,7 @@ class GraphState(TypedDict):
     document_id: str
     filename: str
     object_key: str
-    raw_content: str
+    raw_bytes: bytes
 
     # ── Classify node outputs (single writer — plain types) ─────────────────
     doc_type: str | None

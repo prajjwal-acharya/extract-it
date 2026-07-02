@@ -7,12 +7,10 @@ from pipelines.nodes.extract import extract_node
 from pipelines.state import GraphState
 
 
-def test_classify_output_is_valid_graph_state_update(minio_client, sample_pdf_bytes) -> None:
-    minio_client.put("raw/passport_P001_20240101.pdf", sample_pdf_bytes, "application/pdf")
-
+def test_classify_output_is_valid_graph_state_update(sample_pdf_bytes) -> None:
     state: GraphState = {  # type: ignore[typeddict-item]
         "filename": "passport_P001_20240101.pdf",
-        "object_key": "raw/passport_P001_20240101.pdf",
+        "raw_bytes": sample_pdf_bytes,
         "doc_type": None,
     }
 
@@ -21,10 +19,7 @@ def test_classify_output_is_valid_graph_state_update(minio_client, sample_pdf_by
 
     valid_keys = set(typing.get_type_hints(GraphState).keys())
 
-    with (
-        mock.patch("pipelines.nodes.classify.get_object_store", return_value=minio_client),
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-    ):
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = classify_node(state)
 
@@ -45,11 +40,7 @@ def test_doc_type_from_classify_is_used_by_extract_schema_lookup(passport_state)
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with (
-        mock.patch("pipelines.nodes.extract.get_object_store") as mock_store_fn,
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-    ):
-        mock_store_fn.return_value.get.return_value = b"%PDF-1.4 test"
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 
@@ -58,7 +49,7 @@ def test_doc_type_from_classify_is_used_by_extract_schema_lookup(passport_state)
     assert "confidence" not in update["extracted_fields"]
 
 
-def test_parallel_classify_and_extract_merge_without_conflict(passport_state) -> None:
+def test_sequential_classify_and_extract_state_updates_are_disjoint() -> None:
     """classify_node and extract_node write to disjoint GraphState keys — no reducer conflict."""
     classify_update = {"doc_type": "passport", "classify_confidence": 0.97}
     extract_update = {"extracted_fields": {"surname": "DOE"}, "extract_confidence": 0.89}
@@ -66,6 +57,5 @@ def test_parallel_classify_and_extract_merge_without_conflict(passport_state) ->
     valid_keys = set(typing.get_type_hints(GraphState).keys())
     merged = {**classify_update, **extract_update}
 
-    # All keys valid, no overlap between the two updates
     assert set(merged.keys()).issubset(valid_keys)
     assert set(classify_update.keys()).isdisjoint(set(extract_update.keys()))

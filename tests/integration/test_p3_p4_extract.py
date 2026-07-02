@@ -19,11 +19,7 @@ def test_extract_output_keys_match_schema_fields(passport_state) -> None:
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with (
-        mock.patch("pipelines.nodes.extract.get_object_store") as mock_store_fn,
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-    ):
-        mock_store_fn.return_value.get.return_value = b"%PDF-1.4 test"
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 
@@ -44,11 +40,7 @@ def test_extract_output_is_valid_graph_state_update(passport_state) -> None:
 
     valid_keys = set(typing.get_type_hints(GraphState).keys())
 
-    with (
-        mock.patch("pipelines.nodes.extract.get_object_store") as mock_store_fn,
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-    ):
-        mock_store_fn.return_value.get.return_value = b"%PDF-1.4 test"
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 
@@ -72,4 +64,4 @@ def test_validate_receives_extracted_fields_and_doc_type(passport_state) -> None
     assert "validation_issues" in update
     assert "validate_confidence" in update
     assert isinstance(update["validation_issues"], list)
-    assert update["validate_confidence"] == 1.0  # all required fields present
+    assert update["validate_confidence"] == 1.0

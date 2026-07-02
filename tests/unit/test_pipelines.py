@@ -1,5 +1,6 @@
 import operator
 import typing
+import unittest.mock as mock
 
 from pipelines.nodes.master import master_node
 from pipelines.router import route_after_validate
@@ -29,19 +30,29 @@ def test_validation_issues_uses_add_reducer() -> None:
 
 
 def test_master_node_parses_filename_pattern() -> None:
+    pdf_bytes = b"%PDF-1.4 stub"
     state: GraphState = {  # type: ignore[typeddict-item]
         "filename": "bank_statement_ACC001_20240101.pdf",
+        "object_key": "raw/bank_statement_ACC001_20240101.pdf",
     }
-    result = master_node(state)
+    with mock.patch("pipelines.nodes.master.get_object_store") as mock_store:
+        mock_store.return_value.get.return_value = pdf_bytes
+        result = master_node(state)
     assert result.get("doc_type") == "bank_statement"
+    assert result.get("raw_bytes") == pdf_bytes
 
 
-def test_master_node_returns_empty_dict_for_unmatched_filename() -> None:
+def test_master_node_sets_raw_bytes_for_unmatched_filename() -> None:
+    pdf_bytes = b"%PDF-1.4 stub"
     state: GraphState = {  # type: ignore[typeddict-item]
         "filename": "random_document.pdf",
+        "object_key": "raw/random_document.pdf",
     }
-    result = master_node(state)
-    assert result == {}
+    with mock.patch("pipelines.nodes.master.get_object_store") as mock_store:
+        mock_store.return_value.get.return_value = pdf_bytes
+        result = master_node(state)
+    assert result.get("raw_bytes") == pdf_bytes
+    assert "doc_type" not in result
 
 
 def test_normalize_node_produces_universal_schema() -> None:
