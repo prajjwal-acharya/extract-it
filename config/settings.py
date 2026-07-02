@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     PUBSUB_TOPIC: str = ""
 
     GEMINI_MODEL: str = "gemini-2.0-flash"  # confirmed current model
+    GOOGLE_API_KEY: str = ""
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
 
     LANGCHAIN_TRACING_V2: bool = True

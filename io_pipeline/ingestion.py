@@ -1,22 +1,10 @@
-import re
 from os.path import basename
 
 from adapters.factory import get_object_store
 from db.models import Document
 from db.session import get_session
-
-_FILENAME_RE = re.compile(
-    r"^(?P<doc_type>.+)_(?P<entity_id>[^_]+)_(?P<date>\d{8})\.(?P<ext>\w+)$"
-)
-
-_CONTENT_TYPES: dict[str, str] = {
-    "pdf": "application/pdf",
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "tiff": "image/tiff",
-    "json": "application/json",
-}
+from shared.utils.filename import parse_doc_type_from_filename
+from shared.utils.mime import mime_from_filename
 
 
 def ingest_file(file_path: str) -> str:
@@ -32,14 +20,12 @@ def ingest_file(file_path: str) -> str:
         data = fh.read()
 
     object_key = f"raw/{filename}"
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    content_type = _CONTENT_TYPES.get(ext, "application/octet-stream")
+    content_type = mime_from_filename(filename)
 
     store = get_object_store()
     store.put(object_key, data, content_type=content_type)
 
-    match = _FILENAME_RE.match(filename)
-    doc_type: str | None = match.group("doc_type") if match else None
+    doc_type = parse_doc_type_from_filename(filename)
 
     session = get_session()
     try:

@@ -1,48 +1,63 @@
+import operator
+import typing
+
+from pipelines.state import GraphState
+from pipelines.nodes.master import master_node
+
+
 def test_graph_state_is_valid_typed_dict() -> None:
-    """GraphState is a TypedDict and can be instantiated with required keys."""
-    raise NotImplementedError
+    hints = typing.get_type_hints(GraphState)
+    assert "document_id" in hints
+    assert "doc_type" in hints
+    assert "status" in hints
 
 
 def test_parallel_fields_have_annotated_reducers() -> None:
-    """doc_type, classify_confidence, extracted_fields, extract_confidence use Annotated reducers."""
-    raise NotImplementedError
+    hints = typing.get_type_hints(GraphState, include_extras=True)
+    # extracted_fields must be Annotated
+    assert typing.get_origin(hints["extracted_fields"]) is typing.Annotated
+    # validation_issues must be Annotated
+    assert typing.get_origin(hints["validation_issues"]) is typing.Annotated
 
 
 def test_validation_issues_uses_add_reducer() -> None:
-    """validation_issues Annotated reducer concatenates lists across parallel updates."""
-    raise NotImplementedError
+    hints = typing.get_type_hints(GraphState, include_extras=True)
+    args = typing.get_args(hints["validation_issues"])
+    # args[1] is the reducer; operator.add for lists performs concatenation
+    assert args[1] is operator.add
 
 
 def test_master_node_parses_filename_pattern() -> None:
-    """master_node() populates doc_type from a correctly formatted filename."""
-    raise NotImplementedError
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "filename": "bank_statement_ACC001_20240101.pdf",
+    }
+    result = master_node(state)
+    assert result.get("doc_type") == "bank_statement"
 
 
 def test_master_node_returns_empty_dict_for_unmatched_filename() -> None:
-    """master_node() returns {} when the filename does not match the expected pattern."""
-    raise NotImplementedError
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "filename": "random_document.pdf",
+    }
+    result = master_node(state)
+    assert result == {}
 
 
 def test_normalize_node_produces_universal_schema() -> None:
-    """normalize_node() maps passport fields to holder_name, id_number, expiry_date."""
     raise NotImplementedError
 
 
 def test_router_routes_to_normalize_above_threshold() -> None:
-    """route_after_validate() returns 'normalize' when confidence >= threshold."""
     raise NotImplementedError
 
 
 def test_router_routes_to_retry_when_retries_remain() -> None:
-    """route_after_validate() returns 'op_a_retry' when below threshold and retry_count < max."""
     raise NotImplementedError
 
 
 def test_router_routes_to_hitl_when_retries_exhausted() -> None:
-    """route_after_validate() returns 'op_b_hitl' when below threshold and retry_count >= max."""
     raise NotImplementedError
 
 
 def test_build_graph_returns_state_graph() -> None:
-    """build_graph() returns a compiled LangGraph StateGraph without errors."""
     raise NotImplementedError
