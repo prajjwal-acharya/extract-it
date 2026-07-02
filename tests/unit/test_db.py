@@ -25,7 +25,21 @@ def test_session_factory_returns_session() -> None:
 
 def test_checkpointer_returns_postgres_saver() -> None:
     """get_checkpointer() returns a PostgresSaver instance."""
-    raise NotImplementedError
+    import unittest.mock as mock
+    from langgraph.checkpoint.postgres import PostgresSaver
+    import db.checkpointer as cp_module
+
+    mock_saver = mock.MagicMock(spec=PostgresSaver)
+    mock_cm = mock.MagicMock()
+    mock_cm.__enter__ = mock.Mock(return_value=mock_saver)
+
+    cp_module._checkpointer = None  # reset singleton
+    with mock.patch("db.checkpointer.PostgresSaver.from_conn_string", return_value=mock_cm):
+        saver = cp_module.get_checkpointer()
+
+    assert saver is mock_saver
+    mock_saver.setup.assert_called_once()
+    cp_module._checkpointer = None  # clean up singleton for other tests
 
 
 def test_upsert_embedding_inserts_new_row() -> None:

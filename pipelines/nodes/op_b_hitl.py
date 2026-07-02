@@ -1,10 +1,26 @@
+from langgraph.types import interrupt
+
 from pipelines.state import GraphState
 
 
 def op_b_hitl_node(state: GraphState) -> dict:
-    """Interrupt the graph and surface extracted fields to a human reviewer.
+    """Pause the graph and surface extracted fields for human review.
 
-    Uses langgraph.types.interrupt() to pause execution.  Resumes when the
-    human decision payload (approved, corrections) is injected via the API.
+    Resume payload shape: {"approved": bool, "corrections": dict | None}
     """
-    raise NotImplementedError
+    decision = interrupt({
+        "document_id": state["document_id"],
+        "doc_type": state.get("doc_type"),
+        "extracted_fields": state.get("extracted_fields"),
+        "validation_issues": state.get("validation_issues"),
+    })
+
+    approved = bool(decision.get("approved"))
+    corrections = decision.get("corrections") or {}
+    merged_fields = {**(state.get("extracted_fields") or {}), **corrections}
+
+    return {
+        "hitl_required": True,
+        "hitl_approved": approved,
+        "extracted_fields": merged_fields,
+    }
