@@ -1,0 +1,43 @@
+def test_document_model_columns_exist() -> None:
+    """Document table defines all required columns including universal_schema."""
+    raise NotImplementedError
+
+
+def test_extraction_result_model_columns_exist() -> None:
+    """ExtractionResult table defines document_id, agent, attempt, raw_output, confidence."""
+    raise NotImplementedError
+
+
+def test_confidence_log_model_columns_exist() -> None:
+    """ConfidenceLog table defines document_id, agent, score, reason."""
+    raise NotImplementedError
+
+
+def test_document_embedding_model_has_vector_column() -> None:
+    """DocumentEmbedding table defines an embedding column of type Vector(768)."""
+    raise NotImplementedError
+
+
+def test_session_factory_returns_session() -> None:
+    """get_session() returns a usable SQLAlchemy Session object."""
+    raise NotImplementedError
+
+
+def test_checkpointer_returns_postgres_saver() -> None:
+    """get_checkpointer() returns a PostgresSaver instance."""
+    raise NotImplementedError
+
+
+def test_upsert_embedding_inserts_new_row() -> None:
+    """upsert_embedding() inserts a DocumentEmbedding when none exists for the chunk."""
+    raise NotImplementedError
+
+
+def test_upsert_embedding_updates_existing_row() -> None:
+    """upsert_embedding() updates an existing DocumentEmbedding rather than duplicating it."""
+    raise NotImplementedError
+
+
+def test_similarity_search_returns_ordered_results() -> None:
+    """similarity_search() returns rows ordered by ascending cosine distance."""
+    raise NotImplementedError

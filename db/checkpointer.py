@@ -1,6 +1,7 @@
-from langgraph.checkpoint.postgres import PostgresSaver
-from config.settings import settings
+def get_checkpointer():
+    """Return a configured PostgresSaver checkpointer for LangGraph.
 
-
-def get_checkpointer() -> PostgresSaver:
-    return PostgresSaver.from_conn_string(settings.DATABASE_URL)
+    Uses langgraph-checkpoint-postgres to persist graph state in the same
+    Postgres instance as the application tables.
+    """
+    raise NotImplementedError

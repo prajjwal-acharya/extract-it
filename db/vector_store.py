@@ -1,26 +1,21 @@
 from sqlalchemy.orm import Session
-from db.models import DocumentEmbedding
 
 
-def upsert_embedding(session: Session, document_id: str, chunk_index: int, chunk_text: str, embedding: list[float]) -> None:
-    existing = session.query(DocumentEmbedding).filter_by(document_id=document_id, chunk_index=chunk_index).first()
-    if existing:
-        existing.chunk_text = chunk_text
-        existing.embedding = embedding
-    else:
-        session.add(DocumentEmbedding(
-            document_id=document_id,
-            chunk_index=chunk_index,
-            chunk_text=chunk_text,
-            embedding=embedding,
-        ))
-    session.commit()
+def upsert_embedding(
+    session: Session,
+    document_id: str,
+    chunk_index: int,
+    chunk_text: str,
+    embedding: list[float],
+) -> None:
+    """Insert or update a DocumentEmbedding row for the given chunk."""
+    raise NotImplementedError
 
 
-def similarity_search(session: Session, query_embedding: list[float], top_k: int = 5) -> list[DocumentEmbedding]:
-    return (
-        session.query(DocumentEmbedding)
-        .order_by(DocumentEmbedding.embedding.cosine_distance(query_embedding))
-        .limit(top_k)
-        .all()
-    )
+def similarity_search(
+    session: Session,
+    query_embedding: list[float],
+    top_k: int = 5,
+) -> list:
+    """Return the top-k DocumentEmbedding rows ranked by cosine distance to query_embedding."""
+    raise NotImplementedError

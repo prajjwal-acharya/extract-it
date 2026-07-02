@@ -1,14 +1,10 @@
-import re
-from pipelines.state import DocumentState
-
-_FILENAME_PATTERN = re.compile(
-    r"(?P<doc_type>[a-z_]+)_(?P<entity_id>[A-Z0-9]+)_(?P<date>\d{8})\.\w+",
-    re.IGNORECASE,
-)
+from pipelines.state import GraphState
 
 
-def master_node(state: DocumentState) -> dict:
-    match = _FILENAME_PATTERN.match(state.filename)
-    if match:
-        return {"doc_type": match.group("doc_type").lower()}
-    return {}
+def master_node(state: GraphState) -> dict:
+    """Parse filename to pre-populate doc_type when the pattern is unambiguous.
+
+    Expected filename pattern: <doc_type>_<entity_id>_<YYYYMMDD>.<ext>
+    Returns an empty dict when the filename does not match.
+    """
+    raise NotImplementedError

@@ -1,18 +1,18 @@
-from config.settings import settings
-from pipelines.state import DocumentState
-
-MAX_RETRIES = 3
+from pipelines.state import GraphState
 
 
-def route_after_validate(state: DocumentState) -> str:
-    if state.validate_confidence >= settings.CONFIDENCE_THRESHOLD:
-        return "normalize"
-    if state.retry_count < MAX_RETRIES:
-        return "op_a_retry"
-    return "op_b_hitl"
+def route_after_validate(state: GraphState) -> str:
+    """Return the next node name after the validate node.
+
+    Routes to 'normalize' if confidence meets threshold, 'op_a_retry' if
+    retries remain, or 'op_b_hitl' when retries are exhausted.
+    """
+    raise NotImplementedError
 
 
-def route_after_hitl(state: DocumentState) -> str:
-    if state.hitl_approved:
-        return "normalize"
-    return "end"
+def route_after_hitl(state: GraphState) -> str:
+    """Return the next node name after the HITL node.
+
+    Routes to 'normalize' if the human approved, otherwise 'end'.
+    """
+    raise NotImplementedError

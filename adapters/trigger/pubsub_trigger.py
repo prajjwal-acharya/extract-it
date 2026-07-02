@@ -1,13 +1,17 @@
-"""GCP Pub/Sub trigger — stub until P9."""
 from typing import Callable
 
 
 class PubSubTrigger:
+    """Trigger implementation backed by GCP Pub/Sub (used when ENV=GCP)."""
+
     def on_new_object(self, callback: Callable[[str], None]) -> None:
-        raise NotImplementedError("PubSub trigger not active until P9")
+        """Register *callback* to be invoked with the GCS object path from each Pub/Sub message."""
+        raise NotImplementedError
 
     def start(self) -> None:
-        raise NotImplementedError("PubSub trigger not active until P9")
+        """Start streaming pull from the configured Pub/Sub subscription."""
+        raise NotImplementedError
 
     def stop(self) -> None:
-        raise NotImplementedError("PubSub trigger not active until P9")
+        """Cancel the streaming pull and release resources."""
+        raise NotImplementedError

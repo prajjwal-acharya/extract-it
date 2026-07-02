@@ -1,0 +1,7 @@
+# Cloud Run service definition — wired in P9
+# STUB: fill resource limits, env vars, service account, and VPC connector
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: doc-intel-platform
+spec: {}

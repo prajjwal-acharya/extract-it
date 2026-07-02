@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     GCS_BUCKET: str = ""
     PUBSUB_TOPIC: str = ""
 
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"  # confirmed current model
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
 
     LANGCHAIN_TRACING_V2: bool = True
     LANGCHAIN_API_KEY: str = ""

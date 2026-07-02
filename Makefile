@@ -1,4 +1,4 @@
-.PHONY: up down test migrate seed lint
+.PHONY: up down test test-live migrate seed lint gcp-sim
 
 up:
 	docker compose up -d
@@ -13,7 +13,7 @@ test-live:
 	pytest tests/ -v
 
 migrate:
-	alembic upgrade head
+	alembic -c infra/migrations/alembic.ini upgrade head
 
 seed:
 	python scripts/seed_db.py
@@ -23,6 +23,3 @@ lint:
 
 gcp-sim:
 	docker compose -f docker-compose.gcp-sim.yml up -d
-
-demo:
-	python scripts/run_local_demo.py

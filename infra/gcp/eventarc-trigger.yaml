@@ -1,0 +1,7 @@
+# Eventarc trigger for GCS → Pub/Sub → Cloud Run — wired in P9
+# STUB: configure GCS bucket, Pub/Sub topic, and Cloud Run target
+apiVersion: eventarc.googleapis.com/v1
+kind: Trigger
+metadata:
+  name: doc-intel-gcs-trigger
+spec: {}

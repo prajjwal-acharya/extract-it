@@ -1,40 +1,25 @@
 import pytest
-from pipelines.graph import graph
-from pipelines.state import DocumentState
 
 
 @pytest.mark.live
 def test_full_pipeline_passport() -> None:
-    state = DocumentState(
-        document_id="test-001",
-        filename="passport_ABC123_20240101.pdf",
-        object_key="raw/passport_ABC123_20240101.pdf",
-        raw_content="[Passport document content here]",
-    )
-    result = graph.invoke(state)
-    assert result["status"] == "complete"
-    assert result["universal_schema"].get("doc_type") == "passport"
+    """Ingest a passport fixture, run the full graph, verify status='complete' and doc_type='passport'."""
+    raise NotImplementedError
 
 
 @pytest.mark.live
 def test_full_pipeline_bank_statement() -> None:
-    state = DocumentState(
-        document_id="test-002",
-        filename="bank_statement_XYZ789_20240101.pdf",
-        object_key="raw/bank_statement_XYZ789_20240101.pdf",
-        raw_content="[Bank statement content here]",
-    )
-    result = graph.invoke(state)
-    assert result["status"] == "complete"
+    """Ingest a bank statement fixture, run the full graph, verify status='complete'."""
+    raise NotImplementedError
 
 
 @pytest.mark.live
-def test_full_pipeline_unknown_triggers_hitl() -> None:
-    state = DocumentState(
-        document_id="test-003",
-        filename="unknown_DOC_20240101.pdf",
-        object_key="raw/unknown_DOC_20240101.pdf",
-        raw_content="[Ambiguous document content]",
-    )
-    result = graph.invoke(state)
-    assert result["status"] in ("hitl_complete", "complete", "pending")
+def test_full_pipeline_unknown_document_triggers_hitl() -> None:
+    """Ingest an ambiguous document that cannot be classified confidently and verify HITL is raised."""
+    raise NotImplementedError
+
+
+@pytest.mark.live
+def test_full_pipeline_trace_appears_in_langsmith() -> None:
+    """After a pipeline run, a trace with the expected run name is present in LangSmith."""
+    raise NotImplementedError

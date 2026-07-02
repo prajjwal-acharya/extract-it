@@ -1,10 +1,6 @@
 from sqlalchemy.orm import Session
-from db.session import get_session
 
 
 def get_db() -> Session:
-    session = get_session()
-    try:
-        yield session
-    finally:
-        session.close()
+    """FastAPI dependency that yields a SQLAlchemy session and closes it after the request."""
+    raise NotImplementedError
