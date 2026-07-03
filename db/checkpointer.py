@@ -14,7 +14,10 @@ def get_checkpointer() -> PostgresSaver:
     """
     global _checkpointer
     if _checkpointer is None:
-        cm = PostgresSaver.from_conn_string(settings.DATABASE_URL)
+        # psycopg's raw connection parser rejects SQLAlchemy's "+psycopg" dialect
+        # suffix — strip it before handing the DSN to PostgresSaver.
+        raw_url = settings.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
+        cm = PostgresSaver.from_conn_string(raw_url)
         _checkpointer = cm.__enter__()
         _checkpointer.setup()
     return _checkpointer

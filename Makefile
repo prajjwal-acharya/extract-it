@@ -1,7 +1,7 @@
 .PHONY: up down test test-live migrate seed lint gcp-sim
 
 up:
-	docker compose up -d
+	docker compose up -d --build
 
 down:
 	docker compose down -v
