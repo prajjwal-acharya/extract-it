@@ -226,3 +226,81 @@ def test_build_graph_returns_state_graph() -> None:
         g = build_graph()
 
     assert isinstance(g, CompiledStateGraph)
+
+
+def test_extract_node_passes_rag_context_to_extract() -> None:
+    """extract_node should retrieve similar embeddings and forward context= to extract()."""
+    from agents.base import AgentResult
+    from db.models import DocumentEmbedding
+    from pipelines.nodes.extract import extract_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "document_id": "test-id",
+        "filename": "passport_P001_20240101.pdf",
+        "object_key": "raw/passport_P001_20240101.pdf",
+        "doc_type": "passport",
+        "raw_bytes": b"%PDF stub",
+    }
+
+    mock_row = mock.MagicMock(spec=DocumentEmbedding)
+    mock_row.chunk_text = '{"surname": "EXAMPLE"}'
+    fake_result = AgentResult(success=True, confidence=0.9, data={"surname": "EXAMPLE"})
+
+    captured: dict = {}
+
+    def capture_extract(content, mime_type, doc_type, context=None):
+        captured["context"] = context
+        return fake_result
+
+    with (
+        mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[mock_row]),
+        mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
+        mock.patch("pipelines.nodes.extract.get_session"),
+    ):
+        result = extract_node(state)
+
+    assert captured["context"] is not None
+    assert '{"surname": "EXAMPLE"}' in captured["context"]
+    assert result["extracted_fields"] == {"surname": "EXAMPLE"}
+    assert result["tool_call_count"] == 0
+
+
+def test_extract_node_no_context_when_no_similar_docs() -> None:
+    """extract_node should pass context=None when similarity_search returns empty."""
+    from agents.base import AgentResult
+    from pipelines.nodes.extract import extract_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "document_id": "test-id",
+        "filename": "bank_statement_A001_20240101.pdf",
+        "object_key": "raw/bank_statement_A001_20240101.pdf",
+        "doc_type": "bank_statement",
+        "raw_bytes": b"%PDF stub",
+    }
+
+    fake_result = AgentResult(success=True, confidence=0.8, data={"balance": 500.0})
+    captured: dict = {}
+
+    def capture_extract(content, mime_type, doc_type, context=None):
+        captured["context"] = context
+        return fake_result
+
+    with (
+        mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
+        mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
+        mock.patch("pipelines.nodes.extract.get_session"),
+    ):
+        extract_node(state)
+
+    assert captured["context"] is None
+
+
+def test_tool_call_count_uses_add_reducer() -> None:
+    import typing
+    hints = typing.get_type_hints(GraphState, include_extras=True)
+    assert typing.get_origin(hints["tool_call_count"]) is typing.Annotated
+    args = typing.get_args(hints["tool_call_count"])
+    import operator as op
+    assert args[1] is op.add

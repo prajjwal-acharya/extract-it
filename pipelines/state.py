@@ -44,6 +44,9 @@ class GraphState(TypedDict):
     hitl_required: bool
     hitl_approved: bool | None
 
+    # ── Verifier tool-call budget tracking (accumulated across nodes) ───────
+    tool_call_count: Annotated[int, operator.add]
+
     # ── Status and error tracking ───────────────────────────────────────────
     error: str | None
     status: str

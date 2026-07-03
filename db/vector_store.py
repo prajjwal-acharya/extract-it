@@ -9,6 +9,7 @@ def upsert_embedding(
     chunk_index: int,
     chunk_text: str,
     embedding: list[float],
+    source: str | None = None,
 ) -> None:
     """Insert or update a DocumentEmbedding row for the given chunk.
 
@@ -23,12 +24,15 @@ def upsert_embedding(
     if existing:
         existing.chunk_text = chunk_text
         existing.embedding = embedding
+        if source is not None:
+            existing.source = source
     else:
         session.add(DocumentEmbedding(
             document_id=document_id,
             chunk_index=chunk_index,
             chunk_text=chunk_text,
             embedding=embedding,
+            source=source,
         ))
     session.commit()
 

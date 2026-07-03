@@ -119,3 +119,104 @@ def test_generate_returns_string() -> None:
         result = generate("Describe this document.")
     assert isinstance(result, str)
     assert len(result) > 0
+
+
+# ── Verifier unit tests ─────────────────────────────────────────────────────
+
+def test_mrz_checksum_valid_digit() -> None:
+    from agents.verifiers import mrz_checksum
+
+    # "SMITH" → S=28,M=22,I=18,T=29,H=17 with weights 7,3,1,7,3
+    # 28*7 + 22*3 + 18*1 + 29*7 + 17*3 = 196+66+18+203+51 = 534 → 534%10 = 4
+    result = mrz_checksum("SMITH", 4)
+    assert result["valid"] is True
+    assert result["expected"] == 4
+
+
+def test_mrz_checksum_invalid_digit() -> None:
+    from agents.verifiers import mrz_checksum
+
+    result = mrz_checksum("SMITH", 9)
+    assert result["valid"] is False
+    assert result["got"] == 9
+
+
+def test_mrz_checksum_filler_char() -> None:
+    from agents.verifiers import mrz_checksum
+
+    # '<' has value 0 — padding should not affect validity
+    result = mrz_checksum("<<<<<", 0)
+    assert result["valid"] is True
+
+
+def test_balance_arithmetic_reconciles() -> None:
+    from agents.verifiers import balance_arithmetic
+
+    result = balance_arithmetic(opening=1000.00, closing=1150.50, transactions=[200.50, -50.00])
+    assert result["valid"] is True
+    assert result["computed_closing"] == 1150.50
+
+
+def test_balance_arithmetic_mismatch() -> None:
+    from agents.verifiers import balance_arithmetic
+
+    result = balance_arithmetic(opening=1000.00, closing=1200.00, transactions=[100.00])
+    assert result["valid"] is False
+    assert result["computed_closing"] == 1100.00
+
+
+def test_balance_arithmetic_within_tolerance() -> None:
+    from agents.verifiers import balance_arithmetic
+
+    # Floating-point accumulation within ±0.01 should pass
+    result = balance_arithmetic(opening=0.1, closing=0.3, transactions=[0.1, 0.1])
+    assert result["valid"] is True
+
+
+# ── Tool-call ceiling test ───────────────────────────────────────────────────
+
+def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
+    """generate_with_tools must not exceed MAX_TOOL_CALLS even if the model keeps requesting tools."""
+    from agents.extract_agent import MAX_TOOL_CALLS
+    from agents.llm_client import generate_with_tools
+    from google.genai import types
+
+    call_count = 0
+
+    def always_fn_call(*args, **kwargs):
+        """Simulate a model that always returns a function_call part."""
+        part = mock.MagicMock()
+        part.function_call = mock.MagicMock()
+        part.function_call.name = "mrz_checksum"
+        part.function_call.args = {"mrz_string": "ABC", "check_digit": 1}
+        candidate = mock.MagicMock()
+        candidate.content = mock.MagicMock()
+        candidate.content.parts = [part]
+        resp = mock.MagicMock()
+        resp.candidates = [candidate]
+        resp.text = None
+        nonlocal call_count
+        call_count += 1
+        return resp
+
+    dummy_decl = types.FunctionDeclaration(
+        name="mrz_checksum",
+        description="test",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={"mrz_string": types.Schema(type=types.Type.STRING), "check_digit": types.Schema(type=types.Type.INTEGER)},
+            required=["mrz_string", "check_digit"],
+        ),
+    )
+    from agents.verifiers import mrz_checksum
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.side_effect = always_fn_call
+        _, calls_made = generate_with_tools(
+            "verify fields",
+            declarations=[dummy_decl],
+            fn_registry={"mrz_checksum": mrz_checksum},
+            max_tool_calls=MAX_TOOL_CALLS,
+        )
+
+    assert calls_made <= MAX_TOOL_CALLS

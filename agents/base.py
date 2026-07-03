@@ -6,3 +6,4 @@ class AgentResult(BaseModel):
     confidence: float
     data: dict
     reason: str | None = None
+    tool_calls_made: int = 0

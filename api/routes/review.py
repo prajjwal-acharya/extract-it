@@ -1,10 +1,15 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from agents.llm_client import embed
 from config.schema_loader import load_schema_model
 from config.settings import settings
+from db.session import get_session
+from db.vector_store import upsert_embedding
 
 router = APIRouter()
 
@@ -46,4 +51,20 @@ def submit_decision(document_id: str, decision: ReviewDecision) -> dict:
             pass  # unknown doc_type — skip field validation
 
     result = graph.invoke(Command(resume=decision.model_dump()), config=config)  # type: ignore[call-overload]
+
+    # Path B: embed corrected fields as HITL exemplar for future RAG retrieval.
+    if decision.approved and decision.corrections:
+        prior_fields = state_snapshot.values.get("extracted_fields") or {}
+        merged = {**prior_fields, **decision.corrections}
+        chunk_text = json.dumps(merged)
+        session = get_session()
+        upsert_embedding(
+            session,
+            document_id=document_id,
+            chunk_index=0,
+            chunk_text=chunk_text,
+            embedding=embed(chunk_text),
+            source="hitl_correction",
+        )
+
     return {"status": "resumed", "state": result}

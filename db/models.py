@@ -52,5 +52,6 @@ class DocumentEmbedding(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(768))
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document: Mapped["Document"] = relationship(back_populates="embeddings")
