@@ -1,8 +1,10 @@
 import json
 
 from adapters.factory import get_object_store
+from agents.llm_client import embed
 from db.models import ConfidenceLog, Document
 from db.session import get_session
+from db.vector_store import upsert_embedding
 from pipelines.state import GraphState
 
 
@@ -42,3 +44,8 @@ def write_output(state: GraphState) -> None:
     store = get_object_store()
     payload = json.dumps(state.get("universal_schema") or {}).encode()
     store.put(f"output/{state['document_id']}.json", payload, content_type="application/json")
+
+    if status == "completed" and state.get("extracted_fields"):
+        chunk_text = json.dumps(state["extracted_fields"])
+        embedding = embed(chunk_text)
+        upsert_embedding(session, state["document_id"], 0, chunk_text, embedding)

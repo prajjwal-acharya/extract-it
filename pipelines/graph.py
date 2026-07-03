@@ -1,14 +1,72 @@
-from langgraph.graph import StateGraph
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+
+from db.checkpointer import get_checkpointer
+from io_pipeline.output_writer import write_output
+from pipelines.nodes.classify import classify_node
+from pipelines.nodes.extract import extract_node
+from pipelines.nodes.master import master_node
+from pipelines.nodes.normalize import normalize_node
+from pipelines.nodes.op_a_retry import op_a_retry_node
+from pipelines.nodes.op_b_hitl import op_b_hitl_node
+from pipelines.nodes.validate import validate_node
+from pipelines.router import route_after_hitl, route_after_validate
+from pipelines.state import GraphState
 
 
-def build_graph() -> StateGraph:
+def _persist_node(state: GraphState) -> dict:
+    write_output(state)
+    return {}
+
+
+def build_graph() -> CompiledStateGraph:
     """Construct and return the compiled LangGraph pipeline.
 
-    Topology (P1–P7):
-        master → [classify ‖ extract] → validate → route →
-            normalize | op_a_retry → validate | op_b_hitl → end
+    Topology: master -> classify -> extract -> validate -> route ->
+        normalize | op_a_retry -> validate | op_b_hitl -> normalize | persist -> END
     """
-    raise NotImplementedError
+    builder = StateGraph(GraphState)
+
+    for name, node in [
+        ("master", master_node),
+        ("classify", classify_node),
+        ("extract", extract_node),
+        ("validate", validate_node),
+        ("normalize", normalize_node),
+        ("op_a_retry", op_a_retry_node),
+        ("op_b_hitl", op_b_hitl_node),
+        ("persist", _persist_node),
+    ]:
+        builder.add_node(name, node)
+
+    builder.set_entry_point("master")
+    builder.add_edge("master", "classify")
+    builder.add_edge("classify", "extract")
+    builder.add_edge("extract", "validate")
+    builder.add_conditional_edges(
+        "validate",
+        route_after_validate,
+        {"normalize": "normalize", "op_a_retry": "op_a_retry", "op_b_hitl": "op_b_hitl"},
+    )
+    builder.add_edge("op_a_retry", "validate")
+    builder.add_conditional_edges(
+        "op_b_hitl",
+        route_after_hitl,
+        {"normalize": "normalize", "persist": "persist"},
+    )
+    builder.add_edge("normalize", "persist")
+    builder.add_edge("persist", END)
+
+    return builder.compile(checkpointer=get_checkpointer())
 
 
-graph = None  # replaced by build_graph().compile() in P1
+# Lazy singleton — defers postgres connection until first pipeline invocation
+# so the module can be imported safely in tests without a live DB.
+_graph: CompiledStateGraph | None = None
+
+
+def get_graph() -> CompiledStateGraph:
+    global _graph
+    if _graph is None:
+        _graph = build_graph()
+    return _graph

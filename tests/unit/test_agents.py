@@ -45,6 +45,32 @@ def test_extract_returns_agent_result_for_passport(sample_pdf_bytes) -> None:
     assert "confidence" not in result.data
 
 
+def test_extract_accepts_optional_context_param(sample_pdf_bytes) -> None:
+    passport_json = (
+        '{"surname": "JONES", "given_names": "ALICE", "nationality": "GBR", '
+        '"date_of_birth": "1985-06-15", "sex": "F", "place_of_birth": null, '
+        '"date_of_issue": "2019-01-01", "date_of_expiry": "2029-01-01", '
+        '"passport_number": "P9876543", "mrz_line1": null, "mrz_line2": null, '
+        '"confidence": 0.88}'
+    )
+    mock_response = mock.MagicMock()
+    mock_response.text = passport_json
+    captured_prompt: list[str] = []
+
+    original_generate = __import__("agents.llm_client", fromlist=["generate"]).generate
+
+    def capture_generate(prompt, **kwargs):
+        captured_prompt.append(prompt)
+        return original_generate.__wrapped__(prompt, **kwargs) if hasattr(original_generate, "__wrapped__") else passport_json
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "passport", context="Example: prior extraction")
+
+    assert result.success is True
+    assert result.data.get("surname") == "JONES"
+
+
 def test_extract_returns_failure_for_unknown_doc_type(sample_pdf_bytes) -> None:
     result = extract(sample_pdf_bytes, "application/pdf", "nonexistent_type")
     assert result.success is False

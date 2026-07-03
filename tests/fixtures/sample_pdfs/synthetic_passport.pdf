@@ -1,0 +1,67 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]
+   /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 612 >>
+stream
+BT
+/F1 16 Tf
+50 750 Td
+(PASSPORT) Tj
+0 -22 Td
+(UNITED STATES OF AMERICA) Tj
+0 -22 Td
+() Tj
+0 -22 Td
+(Surname: JOHNSON) Tj
+0 -22 Td
+(Given Names: MICHAEL DAVID) Tj
+0 -22 Td
+(Nationality: UNITED STATES OF AMERICA) Tj
+0 -22 Td
+(Date of Birth: 15 MAR 1985) Tj
+0 -22 Td
+(Sex: M) Tj
+0 -22 Td
+(Place of Birth: NEW YORK, USA) Tj
+0 -22 Td
+(Date of Issue: 10 JAN 2020) Tj
+0 -22 Td
+(Date of Expiry: 09 JAN 2030) Tj
+0 -22 Td
+(Passport No: P12345678) Tj
+0 -22 Td
+() Tj
+0 -22 Td
+(Machine Readable Zone:) Tj
+0 -22 Td
+(P<USAJOHNSON<<MICHAEL<DAVID<<<<<<<<<<<<<<<<) Tj
+0 -22 Td
+(P123456789USA8503154M3001099<<<<<<<<<<<<<<<6) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000244 00000 n 
+0000000907 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+977
+%%EOF

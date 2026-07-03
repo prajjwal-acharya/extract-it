@@ -98,5 +98,89 @@ def test_router_routes_to_hitl_when_retries_exhausted() -> None:
     assert route_after_validate(state) == "op_b_hitl"
 
 
+def test_route_after_hitl_rejection_goes_to_persist() -> None:
+    from pipelines.router import route_after_hitl
+
+    rejected: GraphState = {"hitl_approved": False}  # type: ignore[typeddict-item]
+    assert route_after_hitl(rejected) == "persist"
+
+    approved: GraphState = {"hitl_approved": True}  # type: ignore[typeddict-item]
+    assert route_after_hitl(approved) == "normalize"
+
+
+def test_op_a_retry_increments_retry_count() -> None:
+    from agents.base import AgentResult
+    from pipelines.nodes.op_a_retry import op_a_retry_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "document_id": "test-id",
+        "filename": "passport_P001_20240101.pdf",
+        "object_key": "raw/passport_P001_20240101.pdf",
+        "doc_type": "passport",
+        "raw_bytes": b"%PDF stub",
+        "extracted_fields": {"surname": "SMITH"},
+        "retry_count": 0,
+    }
+    fake_result = AgentResult(success=True, confidence=0.9, data={"surname": "SMITH"})
+    fake_validate = AgentResult(success=True, confidence=0.9, data={"issues": []})
+
+    with (
+        mock.patch("pipelines.nodes.op_a_retry.embed", return_value=[0.0] * 768),
+        mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[]),
+        mock.patch("pipelines.nodes.op_a_retry.extract", return_value=fake_result),
+        mock.patch("pipelines.nodes.op_a_retry.validate", return_value=fake_validate),
+        mock.patch("pipelines.nodes.op_a_retry.get_session"),
+    ):
+        result = op_a_retry_node(state)
+
+    assert result["retry_count"] == 1
+
+
+def test_op_a_retry_uses_similarity_search_context() -> None:
+    from agents.base import AgentResult
+    from db.models import DocumentEmbedding
+    from pipelines.nodes.op_a_retry import op_a_retry_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "document_id": "test-id",
+        "filename": "passport_P001_20240101.pdf",
+        "object_key": "raw/passport_P001_20240101.pdf",
+        "doc_type": "passport",
+        "raw_bytes": b"%PDF stub",
+        "extracted_fields": {},
+        "retry_count": 1,
+    }
+
+    mock_row = mock.MagicMock(spec=DocumentEmbedding)
+    mock_row.chunk_text = '{"surname": "EXAMPLE"}'
+    fake_result = AgentResult(success=True, confidence=0.95, data={"surname": "SMITH"})
+    fake_validate = AgentResult(success=True, confidence=0.95, data={"issues": []})
+
+    captured: dict = {}
+
+    def capture_extract(content, mime_type, doc_type, context=None):
+        captured["context"] = context
+        return fake_result
+
+    with (
+        mock.patch("pipelines.nodes.op_a_retry.embed", return_value=[0.0] * 768),
+        mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[mock_row]),
+        mock.patch("pipelines.nodes.op_a_retry.extract", side_effect=capture_extract),
+        mock.patch("pipelines.nodes.op_a_retry.validate", return_value=fake_validate),
+        mock.patch("pipelines.nodes.op_a_retry.get_session"),
+    ):
+        op_a_retry_node(state)
+
+    assert captured["context"] is not None
+    assert '{"surname": "EXAMPLE"}' in captured["context"]
+
+
 def test_build_graph_returns_state_graph() -> None:
-    raise NotImplementedError
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph.state import CompiledStateGraph
+    from pipelines.graph import build_graph
+
+    with mock.patch("pipelines.graph.get_checkpointer", return_value=MemorySaver()):
+        g = build_graph()
+
+    assert isinstance(g, CompiledStateGraph)

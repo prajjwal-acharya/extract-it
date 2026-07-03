@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     PUBSUB_TOPIC: str = ""
 
     GEMINI_MODEL: str = "gemini-2.0-flash"  # confirmed current model
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_DIMENSIONS: int = 768
     GOOGLE_API_KEY: str = ""
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
 

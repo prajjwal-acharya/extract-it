@@ -3,7 +3,7 @@ from agents.llm_client import generate
 from config.schema_loader import load_schema_model
 
 
-def extract(content: bytes, mime_type: str, doc_type: str) -> AgentResult:
+def extract(content: bytes, mime_type: str, doc_type: str, context: str | None = None) -> AgentResult:
     """Extract structured fields from document bytes using the YAML schema for doc_type."""
     try:
         model = load_schema_model(doc_type)
@@ -12,6 +12,8 @@ def extract(content: bytes, mime_type: str, doc_type: str) -> AgentResult:
 
     fields = [f for f in model.model_fields if f != "confidence"]
     prompt = f"Extract these fields from the document as JSON: {fields}"
+    if context:
+        prompt = f"{context}\n\n{prompt}"
 
     try:
         raw = generate(prompt, image_bytes=content, mime_type=mime_type, response_schema=model)
