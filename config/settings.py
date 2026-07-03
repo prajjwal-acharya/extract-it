@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str = ""
     LANGCHAIN_PROJECT: str = "doc-intel-platform"
 
+    REVIEW_API_KEY: str = ""
+
     CONFIDENCE_THRESHOLD: float = 0.85
     MAX_RETRIES: int = 2
 

@@ -1,10 +1,8 @@
+import unittest.mock as mock
+
+
 def test_document_model_columns_exist() -> None:
     """Document table defines all required columns including universal_schema."""
-    raise NotImplementedError
-
-
-def test_extraction_result_model_columns_exist() -> None:
-    """ExtractionResult table defines document_id, agent, attempt, raw_output, confidence."""
     raise NotImplementedError
 
 
@@ -25,7 +23,6 @@ def test_session_factory_returns_session() -> None:
 
 def test_checkpointer_returns_postgres_saver() -> None:
     """get_checkpointer() returns a PostgresSaver instance and strips the SQLAlchemy dialect prefix."""
-    import unittest.mock as mock
     from langgraph.checkpoint.postgres import PostgresSaver
     import db.checkpointer as cp_module
 

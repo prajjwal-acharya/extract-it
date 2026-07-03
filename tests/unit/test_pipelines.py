@@ -175,6 +175,48 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
     assert '{"surname": "EXAMPLE"}' in captured["context"]
 
 
+def test_normalize_canonicalizes_expiry_date() -> None:
+    """normalize_node converts mixed date formats to ISO 8601 (YYYY-MM-DD)."""
+    from pipelines.nodes.normalize import normalize_node
+
+    cases = [
+        ("10/02/2020", "2020-02-10"),   # DD/MM/YYYY — dayfirst=True
+        ("09 JAN 2030", "2030-01-09"),  # human-readable month
+        ("2025-06-30", "2025-06-30"),   # already ISO — pass-through
+    ]
+    for raw, expected in cases:
+        state: GraphState = {  # type: ignore[typeddict-item]
+            "doc_type": "passport",
+            "extracted_fields": {
+                "surname": "SMITH",
+                "given_names": "JOHN",
+                "passport_number": "AB123456",
+                "date_of_expiry": raw,
+            },
+        }
+        result = normalize_node(state)
+        assert result["universal_schema"]["expiry_date"] == expected, (
+            f"Expected {expected!r} for input {raw!r}, got {result['universal_schema']['expiry_date']!r}"
+        )
+
+
+def test_normalize_leaves_unparseable_date_unchanged() -> None:
+    """normalize_node passes through dates it cannot parse rather than dropping them."""
+    from pipelines.nodes.normalize import normalize_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "doc_type": "passport",
+        "extracted_fields": {
+            "surname": "SMITH",
+            "given_names": "JOHN",
+            "passport_number": "AB123456",
+            "date_of_expiry": "not-a-date",
+        },
+    }
+    result = normalize_node(state)
+    assert result["universal_schema"]["expiry_date"] == "not-a-date"
+
+
 def test_build_graph_returns_state_graph() -> None:
     from langgraph.checkpoint.memory import MemorySaver
     from langgraph.graph.state import CompiledStateGraph

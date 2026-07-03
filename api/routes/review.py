@@ -1,8 +1,21 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import APIKeyHeader
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from config.schema_loader import load_schema_model
+from config.settings import settings
+
 router = APIRouter()
+
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _require_api_key(key: str | None = Depends(_api_key_header)) -> None:
+    if not settings.REVIEW_API_KEY:
+        return  # key not configured — open in dev
+    if key != settings.REVIEW_API_KEY:
+        raise HTTPException(401, "Invalid or missing X-API-Key")
 
 
 class ReviewDecision(BaseModel):
@@ -10,10 +23,27 @@ class ReviewDecision(BaseModel):
     corrections: dict | None = None
 
 
-@router.post("/{document_id}/decision")
+@router.post("/{document_id}/decision", dependencies=[Depends(_require_api_key)])
 def submit_decision(document_id: str, decision: ReviewDecision) -> dict:
     """Resume an interrupted graph run with a human review decision."""
     from pipelines.graph import get_graph
     config = {"configurable": {"thread_id": document_id}}
-    result = get_graph().invoke(Command(resume=decision.model_dump()), config=config)  # type: ignore[call-overload]
+    graph = get_graph()
+
+    state_snapshot = graph.get_state(config)  # type: ignore[arg-type]
+    if state_snapshot is None or not state_snapshot.values:
+        raise HTTPException(404, f"No pending review for document_id={document_id!r}")
+
+    doc_type = state_snapshot.values.get("doc_type")
+    if decision.corrections and doc_type:
+        try:
+            model = load_schema_model(doc_type)
+            valid_fields = set(model.model_fields) - {"confidence"}
+            invalid = set(decision.corrections) - valid_fields
+            if invalid:
+                raise HTTPException(422, f"Unknown fields for {doc_type!r}: {sorted(invalid)}")
+        except FileNotFoundError:
+            pass  # unknown doc_type — skip field validation
+
+    result = graph.invoke(Command(resume=decision.model_dump()), config=config)  # type: ignore[call-overload]
     return {"status": "resumed", "state": result}
