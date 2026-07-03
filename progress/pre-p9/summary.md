@@ -66,3 +66,16 @@ already-ISO dates — `"2030-02-10"` would be reinterpreted as Oct 2 (02=day,
 ```
 78 passed (+7 from P8 baseline of 71), 15 pre-existing stubs, ruff clean, mypy clean
 ```
+
+## Known model-dependent edge case (non-blocking, not a fix-now item)
+
+`gemini-3.1-flash-lite` cannot read PDFs whose `/Contents` entry is an inline
+`DecodedStreamObject` — reports the page as blank and defaults to classifying as
+"passport". `gemini-2.5-flash` tolerates the inline form. The synthetic bank
+statement fixture triggered this during TEST-5; fixed by using `_add_object()` so
+`/Contents` is an `IndirectObject` (same structure as `synthetic_passport.pdf`).
+
+Real-world implication: a scanned or unusual PDF with a non-standard internal
+stream structure could trigger silent misclassification to "passport" on this
+model. No pipeline code change needed — this is a test fixture construction
+issue — but worth monitoring if the deployed model is ever swapped.
