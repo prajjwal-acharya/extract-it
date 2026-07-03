@@ -1,4 +1,5 @@
 import json
+import logging
 
 from google.genai import types
 
@@ -6,6 +7,8 @@ from agents.base import AgentResult
 from agents.llm_client import generate, generate_with_tools
 from agents.verifiers import balance_arithmetic, mrz_checksum
 from config.schema_loader import load_schema_model
+
+log = logging.getLogger(__name__)
 
 MAX_TOOL_CALLS = 3
 
@@ -70,24 +73,28 @@ def extract(content: bytes, mime_type: str, doc_type: str, context: str | None =
 
     # Verification pass: let the LLM call verifiers to confirm field consistency.
     tool_calls_made = 0
+    verification_passed: bool | None = None
     if doc_type in _VERIFIABLE and extracted:
         verify_prompt = (
             f"Verify the extracted {doc_type} fields using the available tools. "
             f"Fields: {json.dumps(extracted)}"
         )
         try:
-            _, tool_calls_made = generate_with_tools(
+            _, tool_calls_made, tool_results = generate_with_tools(
                 verify_prompt,
                 declarations=_VERIFIER_DECLARATIONS,
                 fn_registry=_VERIFIER_REGISTRY,
                 max_tool_calls=MAX_TOOL_CALLS,
             )
-        except Exception:
-            pass  # verification failure is non-fatal; extraction result stands
+            if tool_results:
+                verification_passed = all(r["result"].get("valid", True) for r in tool_results)
+        except Exception as e:
+            log.warning("verifier pass failed for doc_type=%s: %s", doc_type, e)
 
     return AgentResult(
         success=True,
         confidence=confidence,
         data=extracted,
         tool_calls_made=tool_calls_made,
+        verification_passed=verification_passed,
     )

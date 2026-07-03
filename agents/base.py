@@ -7,3 +7,4 @@ class AgentResult(BaseModel):
     data: dict
     reason: str | None = None
     tool_calls_made: int = 0
+    verification_passed: bool | None = None  # None = not attempted

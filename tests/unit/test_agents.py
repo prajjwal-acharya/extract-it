@@ -212,7 +212,7 @@ def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
 
     with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.side_effect = always_fn_call
-        _, calls_made = generate_with_tools(
+        _, calls_made, _ = generate_with_tools(
             "verify fields",
             declarations=[dummy_decl],
             fn_registry={"mrz_checksum": mrz_checksum},
@@ -220,3 +220,115 @@ def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
         )
 
     assert calls_made <= MAX_TOOL_CALLS
+
+
+def test_generate_with_tools_returns_tool_results() -> None:
+    """generate_with_tools must surface each tool result in the returned list."""
+    from agents.llm_client import generate_with_tools
+    from agents.verifiers import mrz_checksum
+    from google.genai import types
+
+    def one_fn_call_then_text(*args, **kwargs):
+        # First call: model requests mrz_checksum
+        if not hasattr(one_fn_call_then_text, "called"):
+            one_fn_call_then_text.called = True
+            part = mock.MagicMock()
+            part.function_call = mock.MagicMock()
+            part.function_call.name = "mrz_checksum"
+            part.function_call.args = {"mrz_string": "SMITH", "check_digit": 4}
+            candidate = mock.MagicMock()
+            candidate.content = mock.MagicMock()
+            candidate.content.parts = [part]
+            resp = mock.MagicMock()
+            resp.candidates = [candidate]
+            resp.text = None
+            return resp
+        # Second call: model returns plain text
+        part = mock.MagicMock()
+        part.function_call = None
+        candidate = mock.MagicMock()
+        candidate.content = mock.MagicMock()
+        candidate.content.parts = [part]
+        resp = mock.MagicMock()
+        resp.candidates = [candidate]
+        resp.text = "Verification complete."
+        return resp
+
+    dummy_decl = types.FunctionDeclaration(
+        name="mrz_checksum",
+        description="test",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "mrz_string": types.Schema(type=types.Type.STRING),
+                "check_digit": types.Schema(type=types.Type.INTEGER),
+            },
+            required=["mrz_string", "check_digit"],
+        ),
+    )
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.side_effect = one_fn_call_then_text
+        _, calls_made, tool_results = generate_with_tools(
+            "verify",
+            declarations=[dummy_decl],
+            fn_registry={"mrz_checksum": mrz_checksum},
+            max_tool_calls=3,
+        )
+
+    assert calls_made == 1
+    assert len(tool_results) == 1
+    assert tool_results[0]["name"] == "mrz_checksum"
+    assert "valid" in tool_results[0]["result"]
+
+
+def test_extract_sets_verification_passed_false_on_checksum_failure(sample_pdf_bytes) -> None:
+    """extract() sets verification_passed=False when a verifier returns valid=False."""
+    from agents.extract_agent import extract
+
+    passport_json = (
+        '{"surname": "SMITH", "given_names": "JOHN", "nationality": "GBR", '
+        '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
+        '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
+        '"passport_number": "P1234567", "mrz_line1": "ABCDEF", "mrz_line2": null, '
+        '"confidence": 0.91}'
+    )
+    mock_response = mock.MagicMock()
+    mock_response.text = passport_json
+
+    failing_tool_results = [{"name": "mrz_checksum", "result": {"valid": False, "expected": 4, "got": 9}}]
+
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 1, failing_tool_results)),
+    ):
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "passport")
+
+    assert result.success is True
+    assert result.verification_passed is False
+    assert result.tool_calls_made == 1
+
+
+def test_extract_verification_passed_none_when_not_verifiable_doc_type(sample_pdf_bytes) -> None:
+    """extract() leaves verification_passed=None for doc_types outside _VERIFIABLE."""
+    from agents.extract_agent import extract
+
+    # Use a doc_type not in _VERIFIABLE — mock schema loader to avoid FileNotFoundError
+    mock_model = mock.MagicMock()
+    mock_model.model_fields = {"amount": mock.MagicMock(), "confidence": mock.MagicMock()}
+    mock_model.model_validate_json.return_value = mock.MagicMock(confidence=0.7, amount=100)
+    mock_model.model_validate_json.return_value.model_dump.return_value = {"amount": 100}
+
+    with (
+        mock.patch("agents.extract_agent.load_schema_model", return_value=mock_model),
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("agents.extract_agent.generate_with_tools") as mock_gwt,
+    ):
+        mock_response = mock.MagicMock()
+        mock_response.text = '{"amount": 100, "confidence": 0.7}'
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "invoice")
+
+    mock_gwt.assert_not_called()
+    assert result.verification_passed is None

@@ -39,6 +39,15 @@ def write_output(state: GraphState) -> None:
                 reason=state.get("error") or "; ".join(state.get("validation_issues") or []) or None,
             ))
 
+    if state.get("verification_passed") is not None:
+        passed = bool(state["verification_passed"])
+        session.add(ConfidenceLog(
+            document_id=state["document_id"],
+            agent="verify",
+            score=1.0 if passed else 0.0,
+            reason=None if passed else "deterministic verifier check failed",
+        ))
+
     session.commit()
 
     store = get_object_store()

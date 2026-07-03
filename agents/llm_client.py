@@ -43,17 +43,19 @@ def generate_with_tools(
     declarations: list,
     fn_registry: dict,
     max_tool_calls: int = 3,
-) -> tuple[str, int]:
-    """Run a Gemini tool-calling loop; returns (final_text, calls_made).
+) -> tuple[str, int, list[dict]]:
+    """Run a Gemini tool-calling loop; returns (final_text, calls_made, tool_results).
 
     declarations: list of types.FunctionDeclaration objects
     fn_registry:  {name: callable} for dispatching function calls
     max_tool_calls: hard cap — once reached the loop exits without another model call
+    tool_results: [{"name": str, "result": dict}, ...] in call order
     """
     tool = types.Tool(function_declarations=declarations)
     contents: list = [prompt]
     calls_made = 0
     final_text = ""
+    tool_results: list[dict] = []
 
     for _ in range(max_tool_calls + 1):
         response = _client().models.generate_content(
@@ -65,26 +67,34 @@ def generate_with_tools(
         if candidate is None:
             break
 
-        fn_parts = [p for p in (candidate.content.parts or []) if getattr(p, "function_call", None)]
+        content = candidate.content
+        if content is None:
+            break
+        fn_parts = [p for p in (content.parts or []) if getattr(p, "function_call", None)]
         if not fn_parts or calls_made >= max_tool_calls:
             final_text = response.text or ""
             break
 
-        contents.append(candidate.content)
+        contents.append(content)
         fn_response_parts: list = []
         for part in fn_parts:
             fc = part.function_call
-            if fc.name in fn_registry and calls_made < max_tool_calls:
-                result = fn_registry[fc.name](**dict(fc.args))
+            if fc is None:
+                continue
+            name: str = str(fc.name)
+            args: dict = dict(fc.args) if fc.args is not None else {}
+            if name in fn_registry and calls_made < max_tool_calls:
+                result = fn_registry[name](**args)
                 calls_made += 1
+                tool_results.append({"name": name, "result": result})
             else:
-                result = {"error": f"unknown function {fc.name!r}"}
+                result = {"error": f"unknown function {name!r}"}
             fn_response_parts.append(
-                types.Part.from_function_response(name=fc.name, response=result)
+                types.Part.from_function_response(name=name, response=result)
             )
         contents.append(types.Content(parts=fn_response_parts))
 
-    return final_text, calls_made
+    return final_text, calls_made, tool_results
 
 
 def embed(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:

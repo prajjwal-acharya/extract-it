@@ -20,6 +20,7 @@ def extract_node(state: GraphState) -> dict:
         "extracted_fields": result.data,
         "extract_confidence": result.confidence,
         "tool_call_count": result.tool_calls_made,
+        "verification_passed": result.verification_passed,
     }
     if not result.success:
         update["error"] = result.reason
