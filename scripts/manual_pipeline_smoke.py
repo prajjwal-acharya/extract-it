@@ -11,14 +11,9 @@ Run from the project root.
 """
 import argparse
 import json
-import sys
 import unittest.mock as mock
 
-# ── bootstrap settings from .env ─────────────────────────────────────────
-from config.settings import settings  # noqa: E402 — must be first import
-
-print(f"ENV={settings.ENV}  MODEL={settings.GEMINI_MODEL}")
-
+from config.settings import settings
 from db.models import Document
 from db.session import SessionLocal
 from pipelines.nodes.classify import classify_node
@@ -27,6 +22,8 @@ from pipelines.nodes.master import master_node
 from pipelines.nodes.validate import validate_node
 from pipelines.router import route_after_validate
 from pipelines.state import GraphState
+
+print(f"ENV={settings.ENV}  MODEL={settings.GEMINI_MODEL}")
 
 
 def build_initial_state(doc_id: str) -> GraphState:
@@ -107,7 +104,6 @@ def run(doc_id: str, use_mock: bool) -> None:
         # Step 2 — master_node
         update = master_node(state)
         print_diff("master_node", {k: v for k, v in update.items() if k != "raw_bytes"})
-        update_display = dict(update)
         state = {**state, **update}  # type: ignore[misc]
 
         # Step 3 — classify_node
