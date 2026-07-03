@@ -75,12 +75,24 @@ def test_ingest_rejects_oversized_upload(client) -> None:
     assert resp.status_code == 413
 
 
-def test_query_endpoint_returns_answer_and_sources() -> None:
-    raise NotImplementedError
+def test_query_endpoint_returns_answer_and_sources(client) -> None:
+    with mock.patch("api.routes.query.embed", return_value=[0.1] * 768), \
+         mock.patch("api.routes.query.retrieve", return_value=[
+             {"document_id": "doc-1", "chunk_text": '{"surname": "SMITH"}', "chunk_index": 0}
+         ]), \
+         mock.patch("api.routes.query.synthesize", return_value="The holder is SMITH [Document doc-1]."):
+        resp = client.post("/query/", json={"question": "Who is the passport holder?"})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "answer" in data
+    assert "sources" in data
+    assert "doc-1" in data["sources"]
 
 
-def test_query_endpoint_rejects_empty_question() -> None:
-    raise NotImplementedError
+def test_query_endpoint_rejects_empty_question(client) -> None:
+    resp = client.post("/query/", json={"question": ""})
+    assert resp.status_code == 422
 
 
 def test_get_db_dependency_yields_session() -> None:

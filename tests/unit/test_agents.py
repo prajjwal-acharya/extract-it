@@ -92,6 +92,25 @@ def test_validate_meets_threshold_true_above_threshold() -> None:
     assert meets_threshold(0.84) is False
 
 
+def test_embed_passes_task_type_to_config() -> None:
+    """embed() forwards task_type to EmbedContentConfig."""
+    from agents.llm_client import embed
+
+    fake_embedding = mock.MagicMock()
+    fake_embedding.values = [0.1] * 768
+    fake_response = mock.MagicMock()
+    fake_response.embeddings = [fake_embedding]
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn, \
+         mock.patch("agents.llm_client.types.EmbedContentConfig") as mock_config:
+        mock_client_fn.return_value.models.embed_content.return_value = fake_response
+        embed("test text", task_type="RETRIEVAL_QUERY")
+
+    mock_config.assert_called_once()
+    call_kwargs = mock_config.call_args[1]
+    assert call_kwargs.get("task_type") == "RETRIEVAL_QUERY"
+
+
 def test_generate_returns_string() -> None:
     mock_response = mock.MagicMock()
     mock_response.text = "This is a Gemini response."

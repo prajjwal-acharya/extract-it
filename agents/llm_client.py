@@ -38,7 +38,7 @@ def generate(
     return response.text or ""
 
 
-def embed(text: str) -> list[float]:
+def embed(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
     """Return an L2-normalized embedding for text at EMBEDDING_DIMENSIONS dims.
 
     gemini-embedding-001 defaults to 3072 dims and is NOT normalized below
@@ -47,7 +47,10 @@ def embed(text: str) -> list[float]:
     response = _client().models.embed_content(
         model=settings.GEMINI_EMBEDDING_MODEL,
         contents=text,
-        config=types.EmbedContentConfig(output_dimensionality=settings.EMBEDDING_DIMENSIONS),
+        config=types.EmbedContentConfig(
+            output_dimensionality=settings.EMBEDDING_DIMENSIONS,
+            task_type=task_type,
+        ),
     )
     embeddings = response.embeddings or []
     vec = np.array(embeddings[0].values)

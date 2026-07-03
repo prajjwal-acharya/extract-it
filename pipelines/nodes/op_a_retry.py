@@ -16,7 +16,7 @@ def op_a_retry_node(state: GraphState) -> dict:
     session = get_session()
 
     query_text = json.dumps(state.get("extracted_fields") or {})
-    similar = similarity_search(session, embed(query_text), top_k=3, doc_type=doc_type)
+    similar = similarity_search(session, embed(query_text, task_type="RETRIEVAL_QUERY"), top_k=3, doc_type=doc_type)
     context = "\n".join(f"Example: {r.chunk_text}" for r in similar) or None
 
     raw_bytes = state.get("raw_bytes") or get_object_store().get(state["object_key"])
