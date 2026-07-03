@@ -23,92 +23,98 @@ endobj
 /Type /Page
 /Resources <<
 /Font <<
-/F1 <<
-/Type /Font
-/Subtype /Type1
-/BaseFont /Helvetica
->>
+/F1 6 0 R
 >>
 >>
 /MediaBox [ 0.0 0.0 595 842 ]
 /Parent 2 0 R
-/Contents <<
-/Length 1702
+/Contents 5 0 R
+>>
+endobj
+5 0 obj
+<<
+/Length 2153
 >>
 stream
 BT
-/F1 14 Tf
-50 780 Td
-(FIRST NATIONAL BANK) Tj
+/F1 18 Tf
+50 800 Td
+(BANK STATEMENT OF ACCOUNT) Tj
 /F1 10 Tf
+0 -22 Td
+(Bank: FIRST NATIONAL BANK PLC  |  IBAN: GB82FNBK12345678  |  Sort Code: 10-20-30) Tj
+0 -16 Td
+(Account Holder: JAMES WILLIAM CARTER  |  Account Type: Current Account) Tj
+0 -16 Td
+(Statement Period: 01 March 2025 to 31 March 2025  |  Currency: GBP) Tj
+0 -16 Td
+(Opening Balance: GBP 4,250.00   Closing Balance: GBP 3,817.45) Tj
+0 -22 Td
+(ACCOUNT TRANSACTIONS) Tj
+/F1 9 Tf
+0 -14 Td
+(Date          Description                          Debit GBP  Credit GBP  Balance GBP) Tj
+0 -12 Td
+(01/03/2025    Opening Balance                                   4250.00     4250.00) Tj
+0 -12 Td
+(03/03/2025    Direct Debit - Rent Payment          1200.00                 3050.00) Tj
+0 -12 Td
+(05/03/2025    Salary Credit ACME Corp Ltd                      2800.00     5850.00) Tj
+0 -12 Td
+(07/03/2025    ATM Cash Withdrawal                  200.00                  5650.00) Tj
+0 -12 Td
+(10/03/2025    Tesco Extra Groceries                 87.32                  5562.68) Tj
+0 -12 Td
+(12/03/2025    British Gas Utility Bill             145.20                  5417.48) Tj
+0 -12 Td
+(15/03/2025    Transfer from Savings Account                     500.00     5917.48) Tj
+0 -12 Td
+(18/03/2025    Amazon Online Purchase               134.99                  5782.49) Tj
+0 -12 Td
+(22/03/2025    Council Tax Payment                  189.00                  5593.49) Tj
+0 -12 Td
+(25/03/2025    Restaurant Dining                     78.50                  5514.99) Tj
+0 -12 Td
+(28/03/2025    EE Mobile Phone                       45.00                  5469.99) Tj
+0 -12 Td
+(31/03/2025    Standing Order to Savings            300.00                  5169.99) Tj
+0 -12 Td
+(31/03/2025    Monthly Interest Credit                            47.46     5217.45) Tj
+0 -12 Td
+(31/03/2025    Bank Service Charges                1400.00                  3817.45) Tj
+0 -18 Td
+(                              CLOSING BALANCE: GBP 3,817.45) Tj
+/F1 8 Tf
 0 -20 Td
-(123 Finance Street, London EC1A 1BB) Tj
-0 -14 Td
-(BANK STATEMENT) Tj
-0 -24 Td
-(Account Holder:  JAMES WILLIAM CARTER) Tj
-0 -14 Td
-(Account Number:  GB82FNBK12345678) Tj
-0 -14 Td
-(Bank Name:       First National Bank) Tj
-0 -14 Td
-(Currency:        GBP) Tj
-0 -14 Td
-(Statement Period: 2025-03-01 to 2025-03-31) Tj
-0 -14 Td
-(Opening Balance: 4250.00) Tj
-0 -14 Td
-(Closing Balance: 3817.45) Tj
-0 -28 Td
-(TRANSACTIONS) Tj
-0 -14 Td
-(Date        Description                   Debit    Credit   Balance) Tj
-0 -14 Td
-(2025-03-01  Opening Balance                        4250.00  4250.00) Tj
-0 -14 Td
-(2025-03-03  Direct Debit Rent             1200.00           3050.00) Tj
-0 -14 Td
-(2025-03-05  Salary Credit ACME Corp               2800.00  5850.00) Tj
-0 -14 Td
-(2025-03-07  ATM Withdrawal                200.00           5650.00) Tj
-0 -14 Td
-(2025-03-10  Groceries Tesco Extra          87.32           5562.68) Tj
-0 -14 Td
-(2025-03-12  Utility Bill British Gas      145.20           5417.48) Tj
-0 -14 Td
-(2025-03-15  Transfer From Savings                  500.00  5917.48) Tj
-0 -14 Td
-(2025-03-18  Online Purchase Amazon        134.99           5782.49) Tj
-0 -14 Td
-(2025-03-22  Council Tax                  189.00           5593.49) Tj
-0 -14 Td
-(2025-03-25  Restaurant The Ivy            78.50           5514.99) Tj
-0 -14 Td
-(2025-03-28  Mobile Phone EE               45.00           5469.99) Tj
-0 -14 Td
-(2025-03-31  Standing Order Savings        300.00           5169.99) Tj
-0 -14 Td
-(2025-03-31  Interest Credit                        47.46   5217.45) Tj
-0 -14 Td
-(2025-03-31  Bank Charges                1400.00           3817.45) Tj
+(First National Bank PLC. Authorised by the Prudential Regulation Authority.) Tj
+0 -12 Td
+(Registered in England No. 12345678. FCA reference: 123456.) Tj
 ET
 
 endstream
+endobj
+6 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
 >>
 endobj
 xref
-0 5
+0 7
 0000000000 65535 f 
 0000000015 00000 n 
 0000000054 00000 n 
 0000000113 00000 n 
 0000000162 00000 n 
+0000000294 00000 n 
+0000002499 00000 n 
 trailer
 <<
-/Size 5
+/Size 7
 /Root 3 0 R
 /Info 1 0 R
 >>
 startxref
-2076
+2569
 %%EOF
