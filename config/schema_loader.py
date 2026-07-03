@@ -37,6 +37,15 @@ def _build_model(name: str, fields: list[dict]) -> type[BaseModel]:
     return create_model(name, **kwargs)
 
 
+def load_universal_mapping(doc_type: str) -> dict:
+    """Return the universal_mapping section of doc_type's YAML schema."""
+    path = _SCHEMA_DIR / f"{doc_type}.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"No schema for doc_type={doc_type!r}")
+    raw = yaml.safe_load(path.read_text())
+    return raw.get("universal_mapping", {})
+
+
 def load_schema_model(doc_type: str) -> type[BaseModel]:
     """Build (or return cached) Pydantic model from config/schemas/<doc_type>.yaml.
 

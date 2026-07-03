@@ -1,11 +1,44 @@
+import json
+
+from adapters.factory import get_object_store
+from db.models import ConfidenceLog, Document
+from db.session import get_session
 from pipelines.state import GraphState
 
 
-def write_output(state: GraphState) -> None:
-    """Persist pipeline results to Postgres and the object store.
+def _compute_status(state: GraphState) -> str:
+    if state.get("error"):
+        return "failed"
+    if state.get("hitl_required") and not state.get("hitl_approved"):
+        return "rejected"
+    return "completed"
 
-    Updates the Document row (status, universal_schema), appends a ConfidenceLog
-    entry, and writes the JSON-serialised universal_schema to output/<doc_id>.json
-    in the object store.
-    """
-    raise NotImplementedError
+
+def write_output(state: GraphState) -> None:
+    """Persist pipeline results to Postgres and the object store."""
+    session = get_session()
+    status = _compute_status(state)
+
+    doc = session.get(Document, state["document_id"])
+    assert doc is not None, f"Document {state['document_id']} not found"
+    doc.status = status
+    doc.universal_schema = state.get("universal_schema") or {}
+
+    for agent, confidence in (
+        ("classify", state.get("classify_confidence")),
+        ("extract", state.get("extract_confidence")),
+        ("validate", state.get("validate_confidence")),
+    ):
+        if confidence is not None:
+            session.add(ConfidenceLog(
+                document_id=state["document_id"],
+                agent=agent,
+                score=confidence,
+                reason=state.get("error") or "; ".join(state.get("validation_issues") or []) or None,
+            ))
+
+    session.commit()
+
+    store = get_object_store()
+    payload = json.dumps(state.get("universal_schema") or {}).encode()
+    store.put(f"output/{state['document_id']}.json", payload, content_type="application/json")

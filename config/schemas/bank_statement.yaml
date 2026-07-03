@@ -41,3 +41,8 @@ fields:
         type: float
       - name: balance
         type: float
+
+universal_mapping:
+  holder_name: account_holder
+  id_number: account_number
+  expiry_date: null

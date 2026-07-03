@@ -56,7 +56,22 @@ def test_master_node_sets_raw_bytes_for_unmatched_filename() -> None:
 
 
 def test_normalize_node_produces_universal_schema() -> None:
-    raise NotImplementedError
+    from pipelines.nodes.normalize import normalize_node
+
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "doc_type": "passport",
+        "extracted_fields": {
+            "surname": "SMITH",
+            "given_names": "JOHN",
+            "passport_number": "AB123456",
+            "date_of_expiry": "2030-01-01",
+        },
+    }
+    result = normalize_node(state)
+    schema = result["universal_schema"]
+    assert schema["holder_name"] == "JOHN SMITH"
+    assert schema["id_number"] == "AB123456"
+    assert schema["expiry_date"] == "2030-01-01"
 
 
 def test_router_routes_to_normalize_above_threshold() -> None:

@@ -38,3 +38,8 @@ fields:
   - name: mrz_line2
     type: string
     required: false
+
+universal_mapping:
+  holder_name: "{given_names} {surname}"
+  id_number: passport_number
+  expiry_date: date_of_expiry
