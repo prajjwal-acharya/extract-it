@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
+from api.deps import get_db
 from db.models import ConfidenceLog, Document, RetrievalLog
-from db.session import get_session
 
 router = APIRouter()
 
@@ -12,8 +13,8 @@ def list_documents(
     doc_type: str | None = Query(None),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    session: Session = Depends(get_db),
 ) -> list[dict]:
-    session = get_session()
     q = session.query(Document)
     if status:
         q = q.filter(Document.status == status)
@@ -34,8 +35,7 @@ def list_documents(
 
 
 @router.get("/{document_id}")
-def get_document(document_id: str) -> dict:
-    session = get_session()
+def get_document(document_id: str, session: Session = Depends(get_db)) -> dict:
     doc = session.get(Document, document_id)
     if doc is None:
         raise HTTPException(404, f"Document {document_id!r} not found")
@@ -69,8 +69,7 @@ def get_document(document_id: str) -> dict:
 
 
 @router.get("/{document_id}/references")
-def get_document_references(document_id: str) -> list[dict]:
-    session = get_session()
+def get_document_references(document_id: str, session: Session = Depends(get_db)) -> list[dict]:
     doc = session.get(Document, document_id)
     if doc is None:
         raise HTTPException(404, f"Document {document_id!r} not found")

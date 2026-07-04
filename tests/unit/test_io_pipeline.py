@@ -3,12 +3,23 @@ import os
 import tempfile
 import unittest.mock as mock
 import uuid
+from contextlib import contextmanager
 
 import pytest
 
 from db.models import ConfidenceLog, Document
 from io_pipeline.ingestion import ingest_file
 from io_pipeline.output_writer import write_output
+
+
+def _make_session_scope(session):
+    """Return a session_scope replacement that yields the given session without closing it."""
+
+    @contextmanager
+    def _scope():
+        yield session
+
+    return _scope
 
 
 def _make_temp_file(name: str, content: bytes = b"%PDF-1.4 test") -> str:
@@ -106,7 +117,9 @@ def test_write_output_updates_document_row(minio_client, postgres_session) -> No
     state = _make_state(doc_id)
 
     with (
-        mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
+        mock.patch(
+            "io_pipeline.output_writer.session_scope", _make_session_scope(postgres_session)
+        ),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
     ):
         write_output(state)  # type: ignore[arg-type]
@@ -123,7 +136,9 @@ def test_write_output_appends_confidence_log(minio_client, postgres_session) -> 
     state = _make_state(doc_id)
 
     with (
-        mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
+        mock.patch(
+            "io_pipeline.output_writer.session_scope", _make_session_scope(postgres_session)
+        ),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
     ):
         write_output(state)  # type: ignore[arg-type]
@@ -143,7 +158,9 @@ def test_write_output_writes_json_to_object_store(minio_client, postgres_session
     state = _make_state(doc_id)
 
     with (
-        mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
+        mock.patch(
+            "io_pipeline.output_writer.session_scope", _make_session_scope(postgres_session)
+        ),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
     ):
         write_output(state)  # type: ignore[arg-type]

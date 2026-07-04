@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
+from api.deps import get_db
 from db.models import Document, RetrievalLog
-from db.session import get_session
 
 router = APIRouter()
 
 
 @router.get("/")
-def get_knowledge_graph(limit: int = Query(50, ge=1, le=500)) -> dict:
-    session = get_session()
-
+def get_knowledge_graph(
+    limit: int = Query(50, ge=1, le=500), session: Session = Depends(get_db)
+) -> dict:
     docs = session.query(Document).order_by(Document.created_at.desc()).limit(limit).all()
     node_ids = {d.id for d in docs}
 

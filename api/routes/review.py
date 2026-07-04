@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from langgraph.types import Command
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from agents.llm_client import embed
+from api.deps import get_db
 from config.schema_loader import load_schema_model
 from config.settings import settings
 from db.models import ConfidenceLog, Document, RetrievalLog
-from db.session import get_session
 from db.vector_store import upsert_embedding
 
 router = APIRouter()
@@ -24,9 +26,8 @@ def _require_api_key(key: str | None = Depends(_api_key_header)) -> None:
 
 
 @router.get("/pending")
-def list_pending_review() -> list[dict]:
+def list_pending_review(session: Session = Depends(get_db)) -> list[dict]:
     """Documents currently in awaiting_review phase."""
-    session = get_session()
     docs = (
         session.query(Document)
         .filter(Document.current_phase == "awaiting_review")
@@ -86,7 +87,9 @@ class ReviewDecision(BaseModel):
 
 
 @router.post("/{document_id}/decision", dependencies=[Depends(_require_api_key)])
-def submit_decision(document_id: str, decision: ReviewDecision) -> dict:
+def submit_decision(
+    document_id: str, decision: ReviewDecision, session: Session = Depends(get_db)
+) -> dict:
     """Resume an interrupted graph run with a human review decision."""
     from pipelines.graph import get_graph
 
@@ -115,7 +118,6 @@ def submit_decision(document_id: str, decision: ReviewDecision) -> dict:
         prior_fields = state_snapshot.values.get("extracted_fields") or {}
         merged = {**prior_fields, **decision.corrections}
         chunk_text = json.dumps(merged)
-        session = get_session()
         upsert_embedding(
             session,
             document_id=document_id,

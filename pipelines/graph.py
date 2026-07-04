@@ -5,7 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from db.checkpointer import get_checkpointer
 from db.models import Document
-from db.session import get_session
+from db.session import session_scope
 from io_pipeline.output_writer import write_output
 from pipelines.nodes.classify import classify_node
 from pipelines.nodes.extract import extract_node
@@ -36,11 +36,10 @@ def _stamp_phase(name: str, fn):
         # Stamp before the node runs so write_output()'s terminal phase overwrite
         # (completed/failed/rejected on the persist node) takes effect last.
         try:
-            session = get_session()
-            doc = session.get(Document, state["document_id"])
-            if doc is not None:
-                doc.current_phase = _PHASE_MAP.get(name, name)
-                session.commit()
+            with session_scope() as session:
+                doc = session.get(Document, state["document_id"])
+                if doc is not None:
+                    doc.current_phase = _PHASE_MAP.get(name, name)
         except Exception:
             log.warning("phase stamp failed for node=%s doc=%s", name, state.get("document_id"))
         return fn(state)

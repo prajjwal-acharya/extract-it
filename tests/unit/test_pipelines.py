@@ -129,7 +129,7 @@ def test_op_a_retry_increments_retry_count() -> None:
         mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[]),
         mock.patch("pipelines.nodes.op_a_retry.extract", return_value=fake_result),
         mock.patch("pipelines.nodes.op_a_retry.validate", return_value=fake_validate),
-        mock.patch("pipelines.nodes.op_a_retry.get_session"),
+        mock.patch("pipelines.nodes.op_a_retry.session_scope"),
     ):
         result = op_a_retry_node(state)
 
@@ -168,7 +168,7 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
         mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[(mock_row, 0.1)]),
         mock.patch("pipelines.nodes.op_a_retry.extract", side_effect=capture_extract),
         mock.patch("pipelines.nodes.op_a_retry.validate", return_value=fake_validate),
-        mock.patch("pipelines.nodes.op_a_retry.get_session"),
+        mock.patch("pipelines.nodes.op_a_retry.session_scope"),
     ):
         op_a_retry_node(state)
 
@@ -258,7 +258,7 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
         mock.patch("pipelines.nodes.extract.similarity_search", return_value=[(mock_row, 0.1)]),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
-        mock.patch("pipelines.nodes.extract.get_session"),
+        mock.patch("pipelines.nodes.extract.session_scope"),
     ):
         result = extract_node(state)
 
@@ -292,7 +292,7 @@ def test_extract_node_no_context_when_no_similar_docs() -> None:
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
         mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
-        mock.patch("pipelines.nodes.extract.get_session"),
+        mock.patch("pipelines.nodes.extract.session_scope"),
     ):
         extract_node(state)
 

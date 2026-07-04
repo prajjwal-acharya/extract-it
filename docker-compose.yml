@@ -18,6 +18,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -36,6 +37,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    restart: unless-stopped
 
   app:
     build:
@@ -51,10 +53,11 @@ services:
       postgres:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - .:/app
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
 
   frontend:
     build:
@@ -71,6 +74,7 @@ services:
     volumes:
       - .:/app
     command: streamlit run frontend/review_app.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
 
 volumes:
   pgdata:
