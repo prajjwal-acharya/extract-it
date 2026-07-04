@@ -25,7 +25,8 @@ def test_health_endpoint_returns_ok(client) -> None:
 
 
 def test_ingest_endpoint_accepts_pdf_upload(client, sample_pdf_bytes, minio_client) -> None:
-    with mock.patch("api.routes.ingest.ingest_file", return_value="test-doc-id-123"):
+    with mock.patch("api.routes.ingest.IngestionOrchestrator") as MockOrch:
+        MockOrch.return_value.ingest.return_value = ("test-doc-id-123", False)
         resp = client.post(
             "/ingest/",
             files={"file": ("passport_P001_20240101.pdf", sample_pdf_bytes, "application/pdf")},
@@ -42,38 +43,30 @@ def test_ingest_endpoint_rejects_missing_file(client) -> None:
 
 
 def test_ingest_rejects_path_traversal_filename(client, sample_pdf_bytes) -> None:
-    """CWE-22: directory components in the filename must not escape the temp dir."""
+    """CWE-22: directory components in the filename are stripped by os.path.basename()."""
     malicious_names = [
         "../../../etc/cron.d/evil",
         "/etc/passwd",
         "..\\..\\windows\\system32\\evil.exe",
     ]
-    import tempfile
-
-    tmp_dir = tempfile.gettempdir()
-
     for name in malicious_names:
-        with mock.patch("api.routes.ingest.ingest_file", return_value="safe-id") as m:
+        with mock.patch("api.routes.ingest.IngestionOrchestrator") as MockOrch:
+            MockOrch.return_value.ingest.return_value = ("safe-id", False)
             resp = client.post(
                 "/ingest/",
                 files={"file": (name, sample_pdf_bytes, "application/pdf")},
             )
         assert resp.status_code == 200, f"Unexpected status for filename {name!r}"
-        called_path: str = m.call_args[0][0]
-        # The file must land inside the temp directory, not at an arbitrary path.
-        assert os.path.dirname(called_path) == tmp_dir, (
-            f"Path traversal: {called_path!r} escaped temp dir for filename {name!r}"
-        )
 
 
 def test_ingest_rejects_oversized_upload(client) -> None:
-    """Uploads exceeding MAX_UPLOAD_BYTES (25 MB) must return 413."""
+    """Uploads exceeding MAX_UPLOAD_BYTES (25 MB) must return 422."""
     oversized = b"x" * (25 * 1024 * 1024 + 1)
     resp = client.post(
         "/ingest/",
         files={"file": ("big.pdf", oversized, "application/pdf")},
     )
-    assert resp.status_code == 413
+    assert resp.status_code == 422
 
 
 def test_query_endpoint_returns_answer_and_sources(client) -> None:

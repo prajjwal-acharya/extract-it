@@ -9,6 +9,7 @@ import pytest
 from db.models import ConfidenceLog, Document
 from io_pipeline.ingestion import ingest_file
 from io_pipeline.output_writer import write_output
+from io_pipeline.validation import ValidatedFile
 
 
 def _make_temp_file(name: str, content: bytes = b"%PDF-1.4 test") -> str:
@@ -19,39 +20,48 @@ def _make_temp_file(name: str, content: bytes = b"%PDF-1.4 test") -> str:
     return path
 
 
+def _fake_validate(data: bytes, filename: str) -> ValidatedFile:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
+    return ValidatedFile(data=data, mime_type="application/pdf", file_size=len(data), extension=ext)
+
+
 def test_ingest_file_stores_object_and_creates_db_row(minio_client, postgres_session) -> None:
     path = _make_temp_file("invoice_ABC123_20240101.pdf")
     try:
         with (
-            mock.patch("io_pipeline.ingestion.get_object_store", return_value=minio_client),
-            mock.patch("io_pipeline.ingestion.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.get_object_store", return_value=minio_client),
+            mock.patch("io_pipeline.orchestrator.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.ValidationService") as MockVS,
         ):
+            MockVS.return_value.validate.side_effect = _fake_validate
             doc_id = ingest_file(path)
 
-        from db.models import Document
-
+        postgres_session.expire_all()
         doc = postgres_session.get(Document, doc_id)
         assert doc is not None
         assert doc.status == "queued"
-        assert doc.object_key == "raw/invoice_ABC123_20240101.pdf"
+        assert doc.object_key.startswith("raw/") and doc.object_key.endswith(".pdf")
     finally:
         os.unlink(path)
 
 
 def test_ingest_file_parses_doc_type_from_filename(minio_client, postgres_session) -> None:
+    # doc_type is now set by the classify node, not during ingestion; verify the
+    # document row is created with current_phase="ingested" instead.
     path = _make_temp_file("bank_statement_XYZ_20231215.pdf")
     try:
         with (
-            mock.patch("io_pipeline.ingestion.get_object_store", return_value=minio_client),
-            mock.patch("io_pipeline.ingestion.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.get_object_store", return_value=minio_client),
+            mock.patch("io_pipeline.orchestrator.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.ValidationService") as MockVS,
         ):
+            MockVS.return_value.validate.side_effect = _fake_validate
             doc_id = ingest_file(path)
 
-        from db.models import Document
-
+        postgres_session.expire_all()
         doc = postgres_session.get(Document, doc_id)
         assert doc is not None
-        assert doc.doc_type == "bank_statement"
+        assert doc.current_phase == "ingested"
     finally:
         os.unlink(path)
 
@@ -60,9 +70,11 @@ def test_ingest_file_returns_document_id_string(minio_client, postgres_session) 
     path = _make_temp_file("passport_P1234567_20240601.pdf")
     try:
         with (
-            mock.patch("io_pipeline.ingestion.get_object_store", return_value=minio_client),
-            mock.patch("io_pipeline.ingestion.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.get_object_store", return_value=minio_client),
+            mock.patch("io_pipeline.orchestrator.get_session", return_value=postgres_session),
+            mock.patch("io_pipeline.orchestrator.ValidationService") as MockVS,
         ):
+            MockVS.return_value.validate.side_effect = _fake_validate
             doc_id = ingest_file(path)
         assert isinstance(doc_id, str)
         assert len(doc_id) > 0
