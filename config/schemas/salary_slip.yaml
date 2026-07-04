@@ -1,0 +1,41 @@
+doc_type: salary_slip
+version: "1.0"
+fields:
+  - name: employee_name
+    type: string
+    required: true
+  - name: employee_id
+    type: string
+    required: true
+  - name: designation
+    type: string
+    required: false
+  - name: pan_number
+    type: string
+    required: false
+  - name: uan_number
+    type: string
+    required: false
+  - name: pay_period
+    type: string
+    required: true
+  - name: employer_name
+    type: string
+    required: true
+  - name: basic_salary
+    type: float
+    required: true
+  - name: hra
+    type: float
+    required: false
+  - name: deductions
+    type: float
+    required: false
+  - name: net_pay
+    type: float
+    required: true
+
+universal_mapping:
+  holder_name: employee_name
+  id_number: employee_id
+  expiry_date: null

@@ -1,0 +1,30 @@
+doc_type: property_deed
+version: "1.0"
+fields:
+  - name: executant_name
+    type: string
+    required: true
+  - name: claimant_name
+    type: string
+    required: true
+  - name: property_address
+    type: string
+    required: true
+  - name: deed_number
+    type: string
+    required: true
+  - name: registration_date
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: survey_number
+    type: string
+    required: false
+  - name: sale_consideration
+    type: float
+    required: true
+
+universal_mapping:
+  holder_name: claimant_name
+  id_number: deed_number
+  expiry_date: null

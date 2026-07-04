@@ -1,0 +1,42 @@
+doc_type: gst_invoice
+version: "1.0"
+fields:
+  - name: seller_gstin
+    type: string
+    required: true
+  - name: buyer_gstin
+    type: string
+    required: false
+  - name: invoice_number
+    type: string
+    required: true
+  - name: invoice_date
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: seller_name
+    type: string
+    required: true
+  - name: buyer_name
+    type: string
+    required: false
+  - name: taxable_value
+    type: float
+    required: true
+  - name: cgst
+    type: float
+    required: false
+  - name: sgst
+    type: float
+    required: false
+  - name: igst
+    type: float
+    required: false
+  - name: total_amount
+    type: float
+    required: true
+
+universal_mapping:
+  holder_name: seller_name
+  id_number: seller_gstin
+  expiry_date: null

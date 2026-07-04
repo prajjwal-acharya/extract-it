@@ -1,0 +1,33 @@
+doc_type: itr
+version: "1.0"
+fields:
+  - name: taxpayer_name
+    type: string
+    required: true
+  - name: pan_number
+    type: string
+    required: true
+  - name: assessment_year
+    type: string
+    required: true
+  - name: filing_date
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: acknowledgement_number
+    type: string
+    required: true
+  - name: gross_total_income
+    type: float
+    required: true
+  - name: total_tax_paid
+    type: float
+    required: false
+  - name: refund_amount
+    type: float
+    required: false
+
+universal_mapping:
+  holder_name: taxpayer_name
+  id_number: pan_number
+  expiry_date: null
