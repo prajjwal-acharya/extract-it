@@ -56,10 +56,10 @@ _VERIFIER_REGISTRY = {"mrz_checksum": mrz_checksum, "balance_arithmetic": balanc
 _VERIFIABLE = {"passport", "bank_statement"}
 
 
-def extract(
+def _extract_once(
     content: bytes, mime_type: str, doc_type: str, context: str | None = None
 ) -> AgentResult:
-    """Extract structured fields from document bytes using the YAML schema for doc_type."""
+    """Single extraction pass — no self-consistency logic."""
     try:
         model = load_schema_model(doc_type)
     except FileNotFoundError as e:
@@ -98,7 +98,7 @@ def extract(
         except Exception as e:
             log.warning("verifier pass failed for doc_type=%s: %s", doc_type, e)
 
-    first = AgentResult(
+    return AgentResult(
         success=True,
         confidence=confidence,
         data=extracted,
@@ -106,11 +106,15 @@ def extract(
         verification_passed=verification_passed,
     )
 
-    if not should_vote(confidence):
+
+def extract(
+    content: bytes, mime_type: str, doc_type: str, context: str | None = None
+) -> AgentResult:
+    """Extract structured fields, applying self-consistency voting if confidence is borderline."""
+    first = _extract_once(content, mime_type, doc_type, context)
+
+    if not should_vote(first.confidence):
         return first
 
-    samples = [first]
-    for _ in range(2):
-        samples.append(extract(content, mime_type, doc_type, context))
-
+    samples = [first] + [_extract_once(content, mime_type, doc_type, context) for _ in range(2)]
     return vote(samples)

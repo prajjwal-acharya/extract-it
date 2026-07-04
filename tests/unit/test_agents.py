@@ -391,7 +391,7 @@ def test_should_vote_gate_boundaries() -> None:
 
 
 def test_extract_triggers_self_consistency_in_borderline_band(sample_pdf_bytes) -> None:
-    """extract() calls the LLM 3 times when confidence is in [0.6, 0.85)."""
+    """extract() calls _extract_once 3 times when confidence is in [0.6, 0.85)."""
     passport_json = (
         '{"surname": "BORDER", "given_names": "LINE", "nationality": "USA", '
         '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
@@ -402,17 +402,20 @@ def test_extract_triggers_self_consistency_in_borderline_band(sample_pdf_bytes) 
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 0, [])),
+    ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")
 
     assert result.success is True
-    # 3 extract calls × 1 generate_content each = 3 (verifier skipped — no MRZ/balance fields set)
+    # 3 extraction calls × 1 generate_content each = 3; verifier is separately mocked
     assert mock_client_fn.return_value.models.generate_content.call_count == 3
 
 
 def test_extract_skips_self_consistency_above_band(sample_pdf_bytes) -> None:
-    """extract() calls the LLM exactly once when confidence >= 0.85."""
+    """extract() calls _extract_once exactly once when confidence >= 0.85."""
     passport_json = (
         '{"surname": "HIGH", "given_names": "CONF", "nationality": "GBR", '
         '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
@@ -423,7 +426,10 @@ def test_extract_skips_self_consistency_above_band(sample_pdf_bytes) -> None:
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 0, [])),
+    ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")
 
