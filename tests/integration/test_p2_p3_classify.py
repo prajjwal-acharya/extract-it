@@ -41,7 +41,11 @@ def test_doc_type_from_classify_is_used_by_extract_schema_lookup(passport_state)
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("pipelines.nodes.extract.get_session"),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
+    ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 

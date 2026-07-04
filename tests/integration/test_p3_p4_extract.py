@@ -20,7 +20,11 @@ def test_extract_output_keys_match_schema_fields(passport_state) -> None:
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("pipelines.nodes.extract.get_session"),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
+    ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 
@@ -41,7 +45,11 @@ def test_extract_output_is_valid_graph_state_update(passport_state) -> None:
 
     valid_keys = set(typing.get_type_hints(GraphState).keys())
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("pipelines.nodes.extract.get_session"),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
+    ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         update = extract_node(passport_state)
 

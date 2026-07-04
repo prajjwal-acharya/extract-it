@@ -60,7 +60,11 @@ def test_write_output_persists_universal_schema_to_postgres(minio_client, postgr
     with (
         mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
+        mock.patch("agents.llm_client._client") as mock_client_fn,
     ):
+        mock_client_fn.return_value.models.embed_content.return_value = mock.MagicMock(
+            embeddings=[mock.MagicMock(values=[0.0] * 768)]
+        )
         write_output(state)  # type: ignore[arg-type]
 
     postgres_session.expire_all()
@@ -88,7 +92,11 @@ def test_write_output_uploads_json_to_object_store(minio_client, postgres_sessio
     with (
         mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
+        mock.patch("agents.llm_client._client") as mock_client_fn,
     ):
+        mock_client_fn.return_value.models.embed_content.return_value = mock.MagicMock(
+            embeddings=[mock.MagicMock(values=[0.0] * 768)]
+        )
         write_output(state)  # type: ignore[arg-type]
 
     stored = json.loads(minio_client.get(f"output/{doc_id}.json"))
