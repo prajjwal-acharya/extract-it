@@ -128,7 +128,9 @@ def upgrade() -> None:
         # ambiguity that arises when the same :param appears in both the SELECT
         # list and the WHERE clause of an INSERT...SELECT in psycopg.
         already_exists = bind.execute(
-            sa.select(sa.func.count()).select_from(_schema_versions).where(
+            sa.select(sa.func.count())
+            .select_from(_schema_versions)
+            .where(
                 sa.and_(
                     _schema_versions.c.doc_type == row["doc_type"],
                     _schema_versions.c.version == "1.0",
