@@ -3,8 +3,8 @@
 ## Prerequisites
 
 - Docker Desktop running
-- Python 3.11 (via pyenv or system)
-- `pip install -e ".[dev]"` already run once for local tooling (pytest, ruff, mypy)
+- Python 3.11+ (via pyenv or system)
+- `pip install -e ".[dev]"` run once for local tooling (pytest, ruff, mypy)
 
 ---
 
@@ -16,20 +16,21 @@
 cp .env.example .env
 ```
 
-Edit `.env` and fill in any keys you need:
+Edit `.env` and fill in the keys you need:
 
 | Key | Required for | Notes |
 |---|---|---|
-| `GOOGLE_API_KEY` | Live LLM calls (classify, extract) | Leave empty to run mocked tests only |
+| `GOOGLE_API_KEY` | Live LLM calls (classify, extract, embed) | Leave empty to run mocked tests only |
 | `LANGCHAIN_API_KEY` | LangSmith tracing | Optional — app works without it, emits a harmless warning |
+| `REVIEW_API_KEY` | HITL review auth | Optional — if unset the review route is open (dev mode) |
 | All others | Local infra | Defaults in `.env.example` work as-is |
 
-### 2. Build the app image
+### 2. Build images
 
-Run this once, and again any time `pyproject.toml` changes:
+Run once, and again whenever `pyproject.toml` changes:
 
 ```bash
-docker compose build app
+docker compose build app frontend
 ```
 
 ### 3. Start services
@@ -38,13 +39,13 @@ docker compose build app
 docker compose up -d
 ```
 
-Wait ~10 seconds for postgres and minio to pass their healthchecks, then confirm:
+Wait ~10 seconds for postgres and minio healthchecks, then confirm:
 
 ```bash
 docker compose ps
 ```
 
-Expected output — postgres and minio show `(healthy)`, app and frontend show `Up`:
+Expected:
 
 ```
 NAME                    STATUS
@@ -60,12 +61,15 @@ extract-it-postgres-1   Up (healthy)
 make migrate
 ```
 
-This applies Alembic migrations (creates `documents`, `extraction_results`,
-`confidence_logs`, `document_embeddings` tables) inside the running app container.
+Applies all Alembic migrations in order. Safe to re-run — idempotent.
+
+Tables created: `documents`, `confidence_logs`, `document_embeddings`,
+`schema_versions`, `retrieval_logs`. Also seeds all doc-type schemas from
+`config/schemas/*.yaml`.
 
 ### 5. Initialise LangGraph checkpointer tables
 
-These are separate from the Alembic migrations and must be run once:
+These are separate from Alembic and must be run once per fresh database:
 
 ```bash
 docker compose exec app python -c "
@@ -74,16 +78,11 @@ from config.settings import settings
 raw_url = settings.DATABASE_URL.replace('postgresql+psycopg://', 'postgresql://')
 with PostgresSaver.from_conn_string(raw_url) as cp:
     cp.setup()
-print('Checkpointer tables ready')
+print('ok')
 "
 ```
 
-> **Note:** `db/checkpointer.py` currently passes the SQLAlchemy DSN prefix
-> (`postgresql+psycopg://`) directly to `PostgresSaver`, which requires a raw
-> `postgresql://` URI. The command above uses the corrected URL directly.
-> This bug is tracked and will be fixed in P7.
-
-### 6. Verify everything is up
+### 6. Verify
 
 ```bash
 curl http://localhost:8000/health
@@ -92,16 +91,16 @@ curl http://localhost:8000/health
 
 ---
 
-## Day-to-day start (after first-time setup)
+## Day-to-day start
 
 ```bash
 docker compose up -d
-# wait ~10s
-make migrate          # safe to re-run — Alembic is idempotent
+sleep 10
+make migrate          # safe to re-run
 ```
 
-No need to re-run the checkpointer setup or rebuild the image unless
-`pyproject.toml` changed.
+No need to rebuild or re-run checkpointer setup unless `pyproject.toml` changed
+or you wiped volumes with `docker compose down -v`.
 
 ---
 
@@ -109,7 +108,7 @@ No need to re-run the checkpointer setup or rebuild the image unless
 
 ```bash
 docker compose down        # stops containers, keeps volumes (data survives)
-docker compose down -v     # stops containers AND deletes volumes (fresh state)
+docker compose down -v     # stops containers AND deletes volumes (clean slate)
 ```
 
 ---
@@ -117,32 +116,59 @@ docker compose down -v     # stops containers AND deletes volumes (fresh state)
 ## Running tests
 
 ```bash
-# Unit + integration, no live API calls (fast, ~5s)
+# Unit + integration, no live API calls (fast, all I/O mocked)
 make test
 
-# All tests including live LLM calls (requires GOOGLE_API_KEY in .env)
+# All tests including live LLM calls (requires GOOGLE_API_KEY)
 make test-live
 ```
+
+The unit tests run without Docker. Integration tests use testcontainers to spin
+up a real Postgres — requires Docker Desktop running.
 
 ---
 
 ## Smoke tests (manual verification)
 
-These scripts require running inside the app container and a document already
-ingested (record the `document_id` from a POST to `/ingest/`).
+These run inside the app container. Get a `document_id` first by posting a file
+to `POST /ingest/`.
 
 ```bash
-# 4a — mocked node chain (no API cost)
+# Mocked node chain (no API cost)
 docker compose exec app sh -c \
   "PYTHONPATH=/app python scripts/manual_pipeline_smoke.py --document-id <id> --mock"
 
-# 4b — live node chain (requires GOOGLE_API_KEY)
+# Live node chain (requires GOOGLE_API_KEY)
 docker compose exec app sh -c \
   "PYTHONPATH=/app python scripts/manual_pipeline_smoke.py --document-id <id>"
 
-# Part 5 — HITL interrupt/resume via single-node graph
+# HITL interrupt/resume
 docker compose exec app sh -c \
   "PYTHONPATH=/app python scripts/manual_hitl_smoke.py --document-id <id>"
+```
+
+---
+
+## Visualise the LangGraph topology
+
+```bash
+docker compose exec app python -c "
+from pipelines.graph import get_graph
+png = get_graph().get_graph().draw_mermaid_png()
+open('/tmp/graph.png', 'wb').write(png)
+print('saved /tmp/graph.png')
+"
+docker cp extract-it-app-1:/tmp/graph.png ./graph.png
+open graph.png
+```
+
+Or print Mermaid text and paste into https://mermaid.live:
+
+```bash
+docker compose exec app python -c "
+from pipelines.graph import get_graph
+print(get_graph().get_graph().draw_mermaid())
+"
 ```
 
 ---
@@ -151,20 +177,34 @@ docker compose exec app sh -c \
 
 | Service | URL | Notes |
 |---|---|---|
-| FastAPI app | http://localhost:8000 | `/health`, `/ingest/`, `/review/` |
+| FastAPI app | http://localhost:8000 | All REST endpoints |
 | API docs | http://localhost:8000/docs | Swagger UI |
-| Streamlit UI | http://localhost:8501 | Ingest, Query (P8), HITL Review |
+| Streamlit UI | http://localhost:8501 | Ingest · Documents · Knowledge Map · HITL Queue · Query |
 | MinIO console | http://localhost:9001 | Login: `minioadmin` / `minioadmin` |
 | Postgres | `localhost:5432` | DB: `docint`, user: `user`, pass: `password` |
 
-> Postgres on port 5432 conflicts with a local Postgres installation if one
-> is running. `make migrate` and the checkpointer setup command both run
-> inside the container so they are unaffected. Direct `psql` from the host
-> should use `docker compose exec postgres psql -U user -d docint`.
+> **Port conflict**: if you have a local Postgres on 5432, `make migrate` and
+> the checkpointer command are unaffected (they run inside the container).
+> For direct `psql` access from the host use:
+> `docker compose exec postgres psql -U user -d docint`
 
 ---
 
-## Current implementation status (P5 of 9)
+## GCP simulation (local)
+
+To test the GCP adapters (GCS object store, Pub/Sub trigger) without a live GCP
+project:
+
+```bash
+make gcp-sim    # docker compose -f docker-compose.gcp-sim.yml up -d
+```
+
+---
+
+## Implementation status
+
+All phases P0–P11 complete. See [README.md](README.md) for the full phase table
+and [ARCHITECTURE.md](ARCHITECTURE.md) for component details.
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -174,12 +214,10 @@ docker compose exec app sh -c \
 | P3 | Schema loader + Extract agent | ✅ Done |
 | P4 | Validate agent + Router | ✅ Done |
 | P5 | HITL node + Checkpointer + Review UI | ✅ Done |
-| P6 | Normalize + op_a_retry nodes | 🔲 Pending |
-| P7 | build_graph() + ingest→graph trigger | 🔲 Pending |
-| P8 | RAG query (retriever + synthesizer) | 🔲 Pending |
-| P9 | GCP deployment | 🔲 Pending |
-
-Known gaps before P6: `POST /query/` and `POST /review/{id}/decision` are
-non-functional stubs. The full pipeline (ingest → classify → extract →
-validate → HITL → normalize) is not yet wired end-to-end; individual nodes
-are verified via `scripts/manual_pipeline_smoke.py`.
+| P6 | Normalize + universal schema + output writing | ✅ Done |
+| P7 | RAG retry (pgvector) + compiled LangGraph + end-to-end wiring | ✅ Done |
+| P8 | Query API + semantic synthesizer | ✅ Done |
+| P9 | Deterministic verifiers + self-consistency + CI | ✅ Done |
+| P10 | Schema versioning + auto-discovery + 4 new doc_types | ✅ Done |
+| P11 | Documents dashboard + knowledge graph + HITL queue + phase tracker | ✅ Done |
+| P12 | GCP deployment (Cloud Run, GCS, Cloud SQL, Pub/Sub) | 🔲 Planned |
