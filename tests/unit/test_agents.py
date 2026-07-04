@@ -327,6 +327,110 @@ def test_extract_sets_verification_passed_false_on_checksum_failure(sample_pdf_b
     assert result.tool_calls_made == 1
 
 
+# ── Self-consistency voting unit tests ──────────────────────────────────────
+
+
+def test_vote_clear_majority_picks_mode() -> None:
+    """2-of-3 agreement on a field wins."""
+    from agents.self_consistency import vote
+
+    results = [
+        AgentResult(success=True, confidence=0.8, data={"surname": "DOE"}),
+        AgentResult(success=True, confidence=0.75, data={"surname": "DOE"}),
+        AgentResult(success=True, confidence=0.7, data={"surname": "DAE"}),
+    ]
+    result = vote(results)
+    assert result.data["surname"] == "DOE"
+
+
+def test_vote_tie_falls_back_to_highest_confidence() -> None:
+    """All-different values (full tie) → highest-confidence sample wins."""
+    from agents.self_consistency import vote
+
+    results = [
+        AgentResult(success=True, confidence=0.82, data={"surname": "ALPHA"}),
+        AgentResult(success=True, confidence=0.71, data={"surname": "BETA"}),
+        AgentResult(success=True, confidence=0.65, data={"surname": "GAMMA"}),
+    ]
+    result = vote(results)
+    assert result.data["surname"] == "ALPHA"
+
+
+def test_vote_unhashable_field_falls_back_to_highest_confidence() -> None:
+    """List/dict values can't be hashed; highest-confidence sample's value is used."""
+    from agents.self_consistency import vote
+
+    results = [
+        AgentResult(success=True, confidence=0.82, data={"items": [1, 2, 3]}),
+        AgentResult(success=True, confidence=0.7, data={"items": [4, 5]}),
+        AgentResult(success=True, confidence=0.65, data={"items": []}),
+    ]
+    result = vote(results)
+    assert result.data["items"] == [1, 2, 3]
+
+
+def test_vote_accumulates_tool_calls() -> None:
+    from agents.self_consistency import vote
+
+    results = [
+        AgentResult(success=True, confidence=0.8, data={}, tool_calls_made=1),
+        AgentResult(success=True, confidence=0.75, data={}, tool_calls_made=2),
+        AgentResult(success=True, confidence=0.7, data={}, tool_calls_made=0),
+    ]
+    assert vote(results).tool_calls_made == 3
+
+
+def test_should_vote_gate_boundaries() -> None:
+    from agents.self_consistency import should_vote
+
+    assert should_vote(0.59) is False
+    assert should_vote(0.6) is True
+    assert should_vote(0.84) is True
+    assert should_vote(0.85) is False
+    assert should_vote(0.86) is False
+
+
+def test_extract_triggers_self_consistency_in_borderline_band(sample_pdf_bytes) -> None:
+    """extract() calls the LLM 3 times when confidence is in [0.6, 0.85)."""
+    passport_json = (
+        '{"surname": "BORDER", "given_names": "LINE", "nationality": "USA", '
+        '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
+        '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
+        '"passport_number": "B0000001", "mrz_line1": null, "mrz_line2": null, '
+        '"confidence": 0.72}'
+    )
+    mock_response = mock.MagicMock()
+    mock_response.text = passport_json
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "passport")
+
+    assert result.success is True
+    # 3 extract calls × 1 generate_content each = 3 (verifier skipped — no MRZ/balance fields set)
+    assert mock_client_fn.return_value.models.generate_content.call_count == 3
+
+
+def test_extract_skips_self_consistency_above_band(sample_pdf_bytes) -> None:
+    """extract() calls the LLM exactly once when confidence >= 0.85."""
+    passport_json = (
+        '{"surname": "HIGH", "given_names": "CONF", "nationality": "GBR", '
+        '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
+        '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
+        '"passport_number": "H0000001", "mrz_line1": null, "mrz_line2": null, '
+        '"confidence": 0.91}'
+    )
+    mock_response = mock.MagicMock()
+    mock_response.text = passport_json
+
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "passport")
+
+    assert result.success is True
+    assert mock_client_fn.return_value.models.generate_content.call_count == 1
+
+
 def test_extract_verification_passed_none_when_not_verifiable_doc_type(sample_pdf_bytes) -> None:
     """extract() leaves verification_passed=None for doc_types outside _VERIFIABLE."""
     from agents.extract_agent import extract

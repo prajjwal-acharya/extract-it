@@ -5,6 +5,7 @@ from google.genai import types
 
 from agents.base import AgentResult
 from agents.llm_client import generate, generate_with_tools
+from agents.self_consistency import should_vote, vote
 from agents.verifiers import balance_arithmetic, mrz_checksum
 from config.schema_loader import load_schema_model
 
@@ -97,10 +98,19 @@ def extract(
         except Exception as e:
             log.warning("verifier pass failed for doc_type=%s: %s", doc_type, e)
 
-    return AgentResult(
+    first = AgentResult(
         success=True,
         confidence=confidence,
         data=extracted,
         tool_calls_made=tool_calls_made,
         verification_passed=verification_passed,
     )
+
+    if not should_vote(confidence):
+        return first
+
+    samples = [first]
+    for _ in range(2):
+        samples.append(extract(content, mime_type, doc_type, context))
+
+    return vote(samples)
