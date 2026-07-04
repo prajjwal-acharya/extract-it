@@ -47,9 +47,7 @@ class ValidationService:
         detected = detect_mime_from_bytes(data)
         declared = mime_from_filename(filename)
         if detected and detected != declared:
-            raise ValidationError(
-                f"mime_mismatch:detected={detected!r},declared={declared!r}"
-            )
+            raise ValidationError(f"mime_mismatch:detected={detected!r},declared={declared!r}")
         mime = detected or declared
 
         # 5–7. PDF-specific checks

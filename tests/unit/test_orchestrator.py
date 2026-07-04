@@ -59,6 +59,7 @@ def _make_orchestrator(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 def test_happy_path_returns_uuid_and_not_duplicate():
     dispatch = mock.MagicMock()
     orch, validator, store, mock_session = _make_orchestrator(dispatch_fn=dispatch)
@@ -67,7 +68,7 @@ def test_happy_path_returns_uuid_and_not_duplicate():
         doc_id, is_dup = orch.ingest(VALID_PDF_DATA, VALID_PDF_FILENAME)
 
     assert is_dup is False
-    assert len(doc_id) == 36          # UUID4 format
+    assert len(doc_id) == 36  # UUID4 format
     assert doc_id.count("-") == 4
 
 
@@ -79,9 +80,9 @@ def test_happy_path_object_key_uses_uuid_not_filename():
         doc_id, _ = orch.ingest(VALID_PDF_DATA, VALID_PDF_FILENAME)
 
     put_call = store.put.call_args
-    key = put_call[0][0]   # first positional arg
+    key = put_call[0][0]  # first positional arg
     assert key == f"raw/{doc_id}.pdf"
-    assert "passport" not in key      # original filename must not leak into key
+    assert "passport" not in key  # original filename must not leak into key
 
 
 def test_happy_path_dispatch_called_once():
@@ -131,7 +132,7 @@ def test_no_dispatch_when_dispatch_fn_is_none():
     with mock.patch("io_pipeline.orchestrator.get_session", return_value=mock_session):
         doc_id, is_dup = orch.ingest(VALID_PDF_DATA, VALID_PDF_FILENAME)
 
-    assert is_dup is False    # completed normally without dispatching
+    assert is_dup is False  # completed normally without dispatching
 
 
 def test_bootstrap_document_has_correct_fields():

@@ -8,10 +8,7 @@ def test_sha256_returns_64_char_hex() -> None:
 
 
 def test_sha256_known_value() -> None:
-    assert (
-        compute_sha256(b"")
-        == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    )
+    assert compute_sha256(b"") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 
 def test_sha256_deterministic() -> None:
