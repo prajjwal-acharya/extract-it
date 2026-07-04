@@ -33,7 +33,8 @@ _PHASE_MAP = {
 
 def _stamp_phase(name: str, fn):
     def wrapped(state: GraphState) -> dict:
-        result = fn(state)
+        # Stamp before the node runs so write_output()'s terminal phase overwrite
+        # (completed/failed/rejected on the persist node) takes effect last.
         try:
             session = get_session()
             doc = session.get(Document, state["document_id"])
@@ -42,7 +43,7 @@ def _stamp_phase(name: str, fn):
                 session.commit()
         except Exception:
             log.warning("phase stamp failed for node=%s doc=%s", name, state.get("document_id"))
-        return result
+        return fn(state)
 
     return wrapped
 
