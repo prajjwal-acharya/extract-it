@@ -38,7 +38,7 @@ def _make_plan(**kwargs) -> RoutingPlan:
         routing_version=ROUTING_VERSION,
     )
     defaults.update(kwargs)
-    return RoutingPlan(**defaults)
+    return RoutingPlan(**defaults)  # type: ignore[arg-type]
 
 
 def test_routing_plan_is_frozen() -> None:
