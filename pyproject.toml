@@ -57,7 +57,16 @@ dev = [
     "testcontainers[postgresql]>=4.7.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    "types-PyYAML>=6.0.0",
+    "types-python-dateutil>=2.9.0",
 ]
+
+[tool.mypy]
+exclude = ["scripts/"]
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*", "testcontainers.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100

@@ -85,6 +85,8 @@ def test_decision_allows_valid_correction_fields(client) -> None:
     with (
         mock.patch(_GRAPH_PATCH, return_value=_mock_graph()),
         mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("api.routes.review.get_session"),
+        mock.patch("api.routes.review.upsert_embedding"),
     ):
         mock_client_fn.return_value.models.embed_content.return_value = mock.MagicMock(
             embeddings=[mock.MagicMock(values=[0.0] * 768)]
