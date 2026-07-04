@@ -33,8 +33,9 @@ def _mock_graph(state_values=None, invoke_result=None):
 _GRAPH_PATCH = "pipelines.graph.get_graph"
 
 
-def test_decision_rejects_unknown_correction_fields(client) -> None:
+def test_decision_rejects_unknown_correction_fields(client, monkeypatch) -> None:
     """422 when corrections contain fields not in the doc_type schema."""
+    monkeypatch.setattr("api.routes.review.settings.REVIEW_API_KEY", "")
     with mock.patch(_GRAPH_PATCH, return_value=_mock_graph()):
         resp = client.post(
             "/review/some-doc-id/decision",
@@ -43,8 +44,9 @@ def test_decision_rejects_unknown_correction_fields(client) -> None:
     assert resp.status_code == 422
 
 
-def test_decision_returns_404_for_unknown_thread_id(client) -> None:
+def test_decision_returns_404_for_unknown_thread_id(client, monkeypatch) -> None:
     """404 when no checkpoint exists for the given document_id."""
+    monkeypatch.setattr("api.routes.review.settings.REVIEW_API_KEY", "")
     g = _mock_graph(state_values={})  # empty values → no pending review
     with mock.patch(_GRAPH_PATCH, return_value=g):
         resp = client.post(
@@ -80,8 +82,9 @@ def test_decision_passes_with_correct_api_key(client, monkeypatch) -> None:
     assert resp.status_code == 200
 
 
-def test_decision_allows_valid_correction_fields(client) -> None:
+def test_decision_allows_valid_correction_fields(client, monkeypatch) -> None:
     """Valid passport field in corrections should not raise 422."""
+    monkeypatch.setattr("api.routes.review.settings.REVIEW_API_KEY", "")
     with (
         mock.patch(_GRAPH_PATCH, return_value=_mock_graph()),
         mock.patch("agents.llm_client._client") as mock_client_fn,

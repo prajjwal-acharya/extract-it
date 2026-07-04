@@ -258,7 +258,7 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
         mock.patch("pipelines.nodes.extract.similarity_search", return_value=[(mock_row, 0.1)]),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
-        mock.patch("pipelines.nodes.extract.session_scope"),
+        mock.patch("pipelines.nodes.extract.get_session"),
     ):
         result = extract_node(state)
 
@@ -292,7 +292,7 @@ def test_extract_node_no_context_when_no_similar_docs() -> None:
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
         mock.patch("pipelines.nodes.extract.similarity_search", return_value=[]),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
-        mock.patch("pipelines.nodes.extract.session_scope"),
+        mock.patch("pipelines.nodes.extract.get_session"),
     ):
         extract_node(state)
 
