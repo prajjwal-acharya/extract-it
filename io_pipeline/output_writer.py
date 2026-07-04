@@ -43,6 +43,16 @@ def write_output(state: GraphState) -> None:
                 )
             )
 
+    if state.get("schema_version") is not None:
+        session.add(
+            ConfidenceLog(
+                document_id=state["document_id"],
+                agent="schema_diff",
+                score=1.0,
+                reason=f"active schema version: {state['schema_version']}",
+            )
+        )
+
     if state.get("verification_passed") is not None:
         passed = bool(state["verification_passed"])
         session.add(

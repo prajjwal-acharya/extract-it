@@ -50,6 +50,9 @@ class GraphState(TypedDict):
     # ── Deterministic verifier outcome (None = not attempted) ───────────────
     verification_passed: bool | None
 
+    # ── Active schema version used for this extraction (audit trail) ────────
+    schema_version: str | None
+
     # ── Status and error tracking ───────────────────────────────────────────
     error: str | None
     status: str

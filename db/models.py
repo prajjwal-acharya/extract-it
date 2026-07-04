@@ -1,6 +1,18 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import (
+    String,
+    Float,
+    Integer,
+    DateTime,
+    JSON,
+    ForeignKey,
+    Text,
+    Boolean,
+    UniqueConstraint,
+    Index,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -55,3 +67,31 @@ class DocumentEmbedding(Base):
     source: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document: Mapped["Document"] = relationship(back_populates="embeddings")
+
+
+class SchemaVersion(Base):
+    """Versioned doc-type schema. YAML files seed version '1.0'; auto-discovery
+    appends new versions and flips is_active — YAML itself is never mutated."""
+
+    __tablename__ = "schema_versions"
+    __table_args__ = (
+        UniqueConstraint("doc_type", "version", name="uq_schema_versions_doc_type_version"),
+        Index(
+            "one_active_per_doctype",
+            "doc_type",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    doc_type: Mapped[str] = mapped_column(String, nullable=False)
+    version: Mapped[str] = mapped_column(String, nullable=False)
+    fields_json: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
+    universal_mapping_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)  # 'reference' | 'auto_discovered'
+    origin_document_id: Mapped[str | None] = mapped_column(
+        ForeignKey("documents.id"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
