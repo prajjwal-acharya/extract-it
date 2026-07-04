@@ -32,6 +32,7 @@ class ReviewDecision(BaseModel):
 def submit_decision(document_id: str, decision: ReviewDecision) -> dict:
     """Resume an interrupted graph run with a human review decision."""
     from pipelines.graph import get_graph
+
     config = {"configurable": {"thread_id": document_id}}
     graph = get_graph()
 

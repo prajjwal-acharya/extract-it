@@ -20,8 +20,12 @@ _VERIFIER_DECLARATIONS = [
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
-                "mrz_string": types.Schema(type=types.Type.STRING, description="Field string excluding check digit"),
-                "check_digit": types.Schema(type=types.Type.INTEGER, description="Check digit (0-9) as integer"),
+                "mrz_string": types.Schema(
+                    type=types.Type.STRING, description="Field string excluding check digit"
+                ),
+                "check_digit": types.Schema(
+                    type=types.Type.INTEGER, description="Check digit (0-9) as integer"
+                ),
             },
             required=["mrz_string", "check_digit"],
         ),
@@ -51,7 +55,9 @@ _VERIFIER_REGISTRY = {"mrz_checksum": mrz_checksum, "balance_arithmetic": balanc
 _VERIFIABLE = {"passport", "bank_statement"}
 
 
-def extract(content: bytes, mime_type: str, doc_type: str, context: str | None = None) -> AgentResult:
+def extract(
+    content: bytes, mime_type: str, doc_type: str, context: str | None = None
+) -> AgentResult:
     """Extract structured fields from document bytes using the YAML schema for doc_type."""
     try:
         model = load_schema_model(doc_type)

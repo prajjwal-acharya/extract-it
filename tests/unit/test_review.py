@@ -19,7 +19,11 @@ def _mock_graph(state_values=None, invoke_result=None):
     """Return a mock graph with get_state and invoke pre-configured."""
     g = mock.MagicMock()
     snapshot = mock.MagicMock()
-    snapshot.values = state_values if state_values is not None else {"doc_type": "passport", "hitl_required": True}
+    snapshot.values = (
+        state_values
+        if state_values is not None
+        else {"doc_type": "passport", "hitl_required": True}
+    )
     g.get_state.return_value = snapshot
     g.invoke.return_value = invoke_result or {}
     return g
@@ -78,7 +82,13 @@ def test_decision_passes_with_correct_api_key(client, monkeypatch) -> None:
 
 def test_decision_allows_valid_correction_fields(client) -> None:
     """Valid passport field in corrections should not raise 422."""
-    with mock.patch(_GRAPH_PATCH, return_value=_mock_graph()):
+    with (
+        mock.patch(_GRAPH_PATCH, return_value=_mock_graph()),
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+    ):
+        mock_client_fn.return_value.models.embed_content.return_value = mock.MagicMock(
+            embeddings=[mock.MagicMock(values=[0.0] * 768)]
+        )
         resp = client.post(
             "/review/some-doc-id/decision",
             json={"approved": True, "corrections": {"surname": "CORRECTED"}},

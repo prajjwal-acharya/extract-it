@@ -1,4 +1,5 @@
 """Integration seam P5↔P6: HITL decision feeds back into the normalize path."""
+
 import unittest.mock as mock
 
 from pipelines.nodes.op_b_hitl import op_b_hitl_node

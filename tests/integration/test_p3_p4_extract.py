@@ -1,4 +1,5 @@
 """Integration seam P3↔P4: extraction output is consumable by the validation node."""
+
 import typing
 import unittest.mock as mock
 
@@ -51,10 +52,17 @@ def test_extract_output_is_valid_graph_state_update(passport_state) -> None:
 
 def test_validate_receives_extracted_fields_and_doc_type(passport_state) -> None:
     extracted = {
-        "surname": "PATEL", "given_names": "RAJ", "nationality": "IND",
-        "date_of_birth": "1995-07-04", "sex": "M", "place_of_birth": "Mumbai",
-        "date_of_issue": "2022-01-01", "date_of_expiry": "2032-01-01",
-        "passport_number": "Z9988776", "mrz_line1": None, "mrz_line2": None,
+        "surname": "PATEL",
+        "given_names": "RAJ",
+        "nationality": "IND",
+        "date_of_birth": "1995-07-04",
+        "sex": "M",
+        "place_of_birth": "Mumbai",
+        "date_of_issue": "2022-01-01",
+        "date_of_expiry": "2032-01-01",
+        "passport_number": "Z9988776",
+        "mrz_line1": None,
+        "mrz_line2": None,
     }
     state: GraphState = {  # type: ignore[typeddict-item]
         **passport_state,

@@ -12,6 +12,7 @@ if config.config_file_name is not None:
 
 # Pull DATABASE_URL from Pydantic settings so it respects .env overrides
 from config.settings import settings  # noqa: E402
+
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata

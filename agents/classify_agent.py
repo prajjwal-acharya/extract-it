@@ -19,7 +19,9 @@ _PROMPT = (
 def classify(content: bytes, mime_type: str) -> AgentResult:
     """Classify document bytes and return doc_type + confidence."""
     try:
-        raw = generate(_PROMPT, image_bytes=content, mime_type=mime_type, response_schema=_ClassifyResponse)
+        raw = generate(
+            _PROMPT, image_bytes=content, mime_type=mime_type, response_schema=_ClassifyResponse
+        )
         parsed = _ClassifyResponse.model_validate_json(raw)
         return AgentResult(
             success=True,

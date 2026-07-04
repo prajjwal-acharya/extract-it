@@ -12,7 +12,12 @@ def extract_node(state: GraphState) -> dict:
     mime_type = mime_from_filename(state["filename"])
 
     session = get_session()
-    similar = similarity_search(session, embed(doc_type or "document", task_type="RETRIEVAL_QUERY"), top_k=3, doc_type=doc_type or None)
+    similar = similarity_search(
+        session,
+        embed(doc_type or "document", task_type="RETRIEVAL_QUERY"),
+        top_k=3,
+        doc_type=doc_type or None,
+    )
     context = "\n".join(f"Example: {r.chunk_text}" for r in similar) or None
 
     result = extract(state["raw_bytes"], mime_type, doc_type, context=context)

@@ -89,9 +89,7 @@ def generate_with_tools(
                 tool_results.append({"name": name, "result": result})
             else:
                 result = {"error": f"unknown function {name!r}"}
-            fn_response_parts.append(
-                types.Part.from_function_response(name=name, response=result)
-            )
+            fn_response_parts.append(types.Part.from_function_response(name=name, response=result))
         contents.append(types.Content(parts=fn_response_parts))
 
     return final_text, calls_made, tool_results

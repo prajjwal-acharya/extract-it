@@ -3,6 +3,7 @@
 Usage (run from project root inside the app container):
     PYTHONPATH=/app python scripts/manual_hitl_smoke.py --document-id <id>
 """
+
 import argparse
 import psycopg
 
@@ -39,7 +40,9 @@ def run(doc_id: str) -> None:
         "doc_type": "passport",
         "classify_confidence": 0.94,
         "extracted_fields": {
-            "surname": "SMOKE", "given_names": "TEST", "nationality": "TST",
+            "surname": "SMOKE",
+            "given_names": "TEST",
+            "nationality": "TST",
             "passport_number": "S0000001",
         },
         "extract_confidence": 0.87,
@@ -64,14 +67,17 @@ def run(doc_id: str) -> None:
     snap = graph.get_state(config)
     print(f"  graph.get_state tasks: {snap.tasks}")
 
-    assert interrupted or snap.tasks, \
+    assert interrupted or snap.tasks, (
         "Expected graph to be interrupted — no __interrupt__ and no pending tasks"
+    )
     print("  ✓ Graph is paused at interrupt")
 
     # ── Step 5: resume ────────────────────────────────────────────────
     correction_field = "date_of_birth"
     correction_value = "1990-05-15"
-    print(f"\nStep 5: resuming with approved=True, corrections={{'{correction_field}': '{correction_value}'}}…")
+    print(
+        f"\nStep 5: resuming with approved=True, corrections={{'{correction_field}': '{correction_value}'}}…"
+    )
     final = graph.invoke(
         Command(resume={"approved": True, "corrections": {correction_field: correction_value}}),
         config=config,
@@ -79,13 +85,15 @@ def run(doc_id: str) -> None:
 
     # ── Step 6: verify final state ────────────────────────────────────
     print(f"\nStep 6: final state keys: {list(final.keys())}")
-    assert final.get("hitl_approved") is True, \
+    assert final.get("hitl_approved") is True, (
         f"Expected hitl_approved=True, got {final.get('hitl_approved')!r}"
+    )
     print("  ✓ hitl_approved=True")
 
     ef = final.get("extracted_fields", {})
-    assert ef.get(correction_field) == correction_value, \
+    assert ef.get(correction_field) == correction_value, (
         f"Expected {correction_field}={correction_value!r} in extracted_fields, got {ef!r}"
+    )
     print(f"  ✓ extracted_fields[{correction_field!r}]={ef[correction_field]!r}")
 
     # ── Step 7: confirm checkpoint row persisted ──────────────────────────

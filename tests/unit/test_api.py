@@ -49,6 +49,7 @@ def test_ingest_rejects_path_traversal_filename(client, sample_pdf_bytes) -> Non
         "..\\..\\windows\\system32\\evil.exe",
     ]
     import tempfile
+
     tmp_dir = tempfile.gettempdir()
 
     for name in malicious_names:
@@ -76,11 +77,18 @@ def test_ingest_rejects_oversized_upload(client) -> None:
 
 
 def test_query_endpoint_returns_answer_and_sources(client) -> None:
-    with mock.patch("api.routes.query.embed", return_value=[0.1] * 768), \
-         mock.patch("api.routes.query.retrieve", return_value=[
-             {"document_id": "doc-1", "chunk_text": '{"surname": "SMITH"}', "chunk_index": 0}
-         ]), \
-         mock.patch("api.routes.query.synthesize", return_value="The holder is SMITH [Document doc-1]."):
+    with (
+        mock.patch("api.routes.query.embed", return_value=[0.1] * 768),
+        mock.patch(
+            "api.routes.query.retrieve",
+            return_value=[
+                {"document_id": "doc-1", "chunk_text": '{"surname": "SMITH"}', "chunk_index": 0}
+            ],
+        ),
+        mock.patch(
+            "api.routes.query.synthesize", return_value="The holder is SMITH [Document doc-1]."
+        ),
+    ):
         resp = client.post("/query/", json={"question": "Who is the passport holder?"})
 
     assert resp.status_code == 200

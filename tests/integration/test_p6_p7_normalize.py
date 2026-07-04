@@ -1,4 +1,5 @@
 """Integration seam P6↔P7: normalize output is persisted by the output writer."""
+
 import json
 import unittest.mock as mock
 import uuid
@@ -41,9 +42,7 @@ def test_normalize_produces_universal_schema_with_required_keys() -> None:
     assert schema["expiry_date"] == "2030-02-10"
 
 
-def test_write_output_persists_universal_schema_to_postgres(
-    minio_client, postgres_session
-) -> None:
+def test_write_output_persists_universal_schema_to_postgres(minio_client, postgres_session) -> None:
     """write_output() updates the Document row's universal_schema column in Postgres."""
     doc_id = str(uuid.uuid4())
     doc = Document(
@@ -71,9 +70,7 @@ def test_write_output_persists_universal_schema_to_postgres(
     assert updated.universal_schema["id_number"] == "Z43R34255"
 
 
-def test_write_output_uploads_json_to_object_store(
-    minio_client, postgres_session
-) -> None:
+def test_write_output_uploads_json_to_object_store(minio_client, postgres_session) -> None:
     """write_output() writes output/<doc_id>.json to the object store after normalize."""
     doc_id = str(uuid.uuid4())
     doc = Document(

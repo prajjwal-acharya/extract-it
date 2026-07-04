@@ -9,6 +9,7 @@ Usage:
 
 Run from the project root.
 """
+
 import argparse
 import json
 import unittest.mock as mock
@@ -54,9 +55,9 @@ def build_initial_state(doc_id: str) -> GraphState:
 
 
 def print_diff(step: str, update: dict) -> None:
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print(f"  {step}")
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
     for k, v in update.items():
         val = v if not isinstance(v, bytes) else f"<bytes len={len(v)}>"
         print(f"  {k}: {json.dumps(val, default=str)}")
@@ -66,17 +67,28 @@ def run(doc_id: str, use_mock: bool) -> None:
     state = build_initial_state(doc_id)
     print(f"\nInitial state: document_id={state['document_id']}  filename={state['filename']}")
 
-    classify_resp_json = json.dumps({
-        "doc_type": "passport",
-        "confidence": 0.94,
-    })
-    extract_resp_json = json.dumps({
-        "surname": "SMOKE", "given_names": "TEST", "nationality": "TST",
-        "date_of_birth": "2000-01-01", "sex": "M", "place_of_birth": None,
-        "date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01",
-        "passport_number": "S0000001", "mrz_line1": None, "mrz_line2": None,
-        "confidence": 0.87,
-    })
+    classify_resp_json = json.dumps(
+        {
+            "doc_type": "passport",
+            "confidence": 0.94,
+        }
+    )
+    extract_resp_json = json.dumps(
+        {
+            "surname": "SMOKE",
+            "given_names": "TEST",
+            "nationality": "TST",
+            "date_of_birth": "2000-01-01",
+            "sex": "M",
+            "place_of_birth": None,
+            "date_of_issue": "2020-01-01",
+            "date_of_expiry": "2030-01-01",
+            "passport_number": "S0000001",
+            "mrz_line1": None,
+            "mrz_line2": None,
+            "confidence": 0.87,
+        }
+    )
 
     def _mock_response(text: str):
         r = mock.MagicMock()
@@ -94,13 +106,23 @@ def run(doc_id: str, use_mock: bool) -> None:
         ctx.__enter__ = lambda s: mock_client  # type: ignore[method-assign]
         ctx.__exit__ = lambda s, *a: None  # type: ignore[method-assign]
 
-    with (mock.patch("agents.llm_client._client", return_value=mock.MagicMock(
-            models=mock.MagicMock(generate_content=mock.MagicMock(side_effect=[
-                _mock_response(classify_resp_json),
-                _mock_response(extract_resp_json),
-            ]))
-    )) if use_mock else mock.MagicMock()) as _:
-
+    with (
+        mock.patch(
+            "agents.llm_client._client",
+            return_value=mock.MagicMock(
+                models=mock.MagicMock(
+                    generate_content=mock.MagicMock(
+                        side_effect=[
+                            _mock_response(classify_resp_json),
+                            _mock_response(extract_resp_json),
+                        ]
+                    )
+                )
+            ),
+        )
+        if use_mock
+        else mock.MagicMock()
+    ) as _:
         # Step 2 — master_node
         update = master_node(state)
         print_diff("master_node", {k: v for k, v in update.items() if k != "raw_bytes"})
@@ -123,32 +145,35 @@ def run(doc_id: str, use_mock: bool) -> None:
 
     # Step 6 — router
     route = route_after_validate(state)
-    print(f"\n{'─'*60}")
+    print(f"\n{'─' * 60}")
     print(f"  route_after_validate → {route!r}")
-    print(f"{'─'*60}")
+    print(f"{'─' * 60}")
 
     # Step 7 — assertions
     print("\nAssertions:")
-    assert state["doc_type"] is not None and isinstance(state["doc_type"], str), \
+    assert state["doc_type"] is not None and isinstance(state["doc_type"], str), (
         "doc_type must be a non-None string after classify_node"
+    )
     print("  ✓ doc_type is non-None string")
 
-    assert isinstance(state["extracted_fields"], dict) and len(state["extracted_fields"]) > 0, \
+    assert isinstance(state["extracted_fields"], dict) and len(state["extracted_fields"]) > 0, (
         "extracted_fields must be a non-empty dict after extract_node"
+    )
     print("  ✓ extracted_fields is non-empty dict")
 
     vc = state["validate_confidence"]
-    assert isinstance(vc, float) and 0.0 <= vc <= 1.0, \
+    assert isinstance(vc, float) and 0.0 <= vc <= 1.0, (
         f"validate_confidence must be float in [0,1], got {vc!r}"
+    )
     print(f"  ✓ validate_confidence={vc:.3f} in [0.0, 1.0]")
 
-    print(f"\n{'═'*60}")
+    print(f"\n{'═' * 60}")
     print(f"  SMOKE PASS  {'(MOCKED)' if use_mock else '(LIVE)'}")
     print(f"  classify_confidence : {state['classify_confidence']:.3f}")
     print(f"  extract_confidence  : {state['extract_confidence']:.3f}")
     print(f"  validate_confidence : {state['validate_confidence']:.3f}")
     print(f"  routing decision    : {route}")
-    print(f"{'═'*60}\n")
+    print(f"{'═' * 60}\n")
 
 
 if __name__ == "__main__":

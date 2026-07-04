@@ -1,4 +1,5 @@
 """Unit tests for db/vector_store.py — upsert and similarity search."""
+
 import math
 import uuid
 
@@ -12,6 +13,7 @@ def _make_embedding(seed: float, dims: int = 768) -> list[float]:
 
 def _make_doc(session, doc_type: str) -> str:
     from db.models import Document
+
     doc_id = str(uuid.uuid4())
     doc = Document(
         id=doc_id,
@@ -35,9 +37,9 @@ def test_upsert_embedding_inserts_new_row(postgres_session) -> None:
 
     upsert_embedding(postgres_session, doc_id, 0, "test chunk", embedding)
 
-    row = postgres_session.query(DocumentEmbedding).filter_by(
-        document_id=doc_id, chunk_index=0
-    ).one()
+    row = (
+        postgres_session.query(DocumentEmbedding).filter_by(document_id=doc_id, chunk_index=0).one()
+    )
     assert row.chunk_text == "test chunk"
     assert len(row.embedding) == 768
 
@@ -53,9 +55,9 @@ def test_upsert_embedding_updates_existing_row(postgres_session) -> None:
     upsert_embedding(postgres_session, doc_id, 0, "updated", _make_embedding(2.0))
 
     postgres_session.expire_all()
-    rows = postgres_session.query(DocumentEmbedding).filter_by(
-        document_id=doc_id, chunk_index=0
-    ).all()
+    rows = (
+        postgres_session.query(DocumentEmbedding).filter_by(document_id=doc_id, chunk_index=0).all()
+    )
     assert len(rows) == 1
     assert rows[0].chunk_text == "updated"
 
@@ -68,7 +70,7 @@ def test_similarity_search_orders_by_distance(postgres_session) -> None:
     doc_a = _make_doc(postgres_session, doc_type=dtype)
     doc_b = _make_doc(postgres_session, doc_type=dtype)
 
-    embedding_a = _make_embedding(1.0)    # matches the query
+    embedding_a = _make_embedding(1.0)  # matches the query
     embedding_b = _make_embedding(100.0)  # far from the query
 
     upsert_embedding(postgres_session, doc_a, 0, "close", embedding_a)

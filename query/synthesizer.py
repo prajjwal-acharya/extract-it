@@ -9,7 +9,7 @@ def synthesize(question: str, chunks: list[dict]) -> str:
     context = "\n\n".join(f"[Document {c['document_id']}]: {c['chunk_text']}" for c in chunks)
     prompt = (
         f"Answer the question using only the context below. Cite document IDs "
-        f'in brackets like [Document <id>] for any claim.\n\nContext:\n{context}\n\n'
+        f"in brackets like [Document <id>] for any claim.\n\nContext:\n{context}\n\n"
         f"Question: {question}"
     )
     return generate(prompt)

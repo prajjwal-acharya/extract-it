@@ -61,11 +61,17 @@ def test_extract_accepts_optional_context_param(sample_pdf_bytes) -> None:
 
     def capture_generate(prompt, **kwargs):
         captured_prompt.append(prompt)
-        return original_generate.__wrapped__(prompt, **kwargs) if hasattr(original_generate, "__wrapped__") else passport_json
+        return (
+            original_generate.__wrapped__(prompt, **kwargs)
+            if hasattr(original_generate, "__wrapped__")
+            else passport_json
+        )
 
     with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
-        result = extract(sample_pdf_bytes, "application/pdf", "passport", context="Example: prior extraction")
+        result = extract(
+            sample_pdf_bytes, "application/pdf", "passport", context="Example: prior extraction"
+        )
 
     assert result.success is True
     assert result.data.get("surname") == "JONES"
@@ -101,8 +107,10 @@ def test_embed_passes_task_type_to_config() -> None:
     fake_response = mock.MagicMock()
     fake_response.embeddings = [fake_embedding]
 
-    with mock.patch("agents.llm_client._client") as mock_client_fn, \
-         mock.patch("agents.llm_client.types.EmbedContentConfig") as mock_config:
+    with (
+        mock.patch("agents.llm_client._client") as mock_client_fn,
+        mock.patch("agents.llm_client.types.EmbedContentConfig") as mock_config,
+    ):
         mock_client_fn.return_value.models.embed_content.return_value = fake_response
         embed("test text", task_type="RETRIEVAL_QUERY")
 
@@ -122,6 +130,7 @@ def test_generate_returns_string() -> None:
 
 
 # ── Verifier unit tests ─────────────────────────────────────────────────────
+
 
 def test_mrz_checksum_valid_digit() -> None:
     from agents.verifiers import mrz_checksum
@@ -175,6 +184,7 @@ def test_balance_arithmetic_within_tolerance() -> None:
 
 # ── Tool-call ceiling test ───────────────────────────────────────────────────
 
+
 def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
     """generate_with_tools must not exceed MAX_TOOL_CALLS even if the model keeps requesting tools."""
     from agents.extract_agent import MAX_TOOL_CALLS
@@ -204,7 +214,10 @@ def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
         description="test",
         parameters=types.Schema(
             type=types.Type.OBJECT,
-            properties={"mrz_string": types.Schema(type=types.Type.STRING), "check_digit": types.Schema(type=types.Type.INTEGER)},
+            properties={
+                "mrz_string": types.Schema(type=types.Type.STRING),
+                "check_digit": types.Schema(type=types.Type.INTEGER),
+            },
             required=["mrz_string", "check_digit"],
         ),
     )
@@ -296,11 +309,15 @@ def test_extract_sets_verification_passed_false_on_checksum_failure(sample_pdf_b
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    failing_tool_results = [{"name": "mrz_checksum", "result": {"valid": False, "expected": 4, "got": 9}}]
+    failing_tool_results = [
+        {"name": "mrz_checksum", "result": {"valid": False, "expected": 4, "got": 9}}
+    ]
 
     with (
         mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 1, failing_tool_results)),
+        mock.patch(
+            "agents.extract_agent.generate_with_tools", return_value=("", 1, failing_tool_results)
+        ),
     ):
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")

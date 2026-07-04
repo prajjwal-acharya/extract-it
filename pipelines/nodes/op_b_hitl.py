@@ -8,12 +8,14 @@ def op_b_hitl_node(state: GraphState) -> dict:
 
     Resume payload shape: {"approved": bool, "corrections": dict | None}
     """
-    decision = interrupt({
-        "document_id": state["document_id"],
-        "doc_type": state.get("doc_type"),
-        "extracted_fields": state.get("extracted_fields"),
-        "validation_issues": state.get("validation_issues"),
-    })
+    decision = interrupt(
+        {
+            "document_id": state["document_id"],
+            "doc_type": state.get("doc_type"),
+            "extracted_fields": state.get("extracted_fields"),
+            "validation_issues": state.get("validation_issues"),
+        }
+    )
 
     approved = bool(decision.get("approved"))
     corrections = decision.get("corrections") or {}

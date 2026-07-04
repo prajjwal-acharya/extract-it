@@ -1,4 +1,5 @@
 """Integration seam P4↔P5: validation output drives the routing decision."""
+
 from pipelines.router import route_after_validate
 from pipelines.state import GraphState
 

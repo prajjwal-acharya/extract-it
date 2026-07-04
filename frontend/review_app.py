@@ -3,6 +3,7 @@
 Three panels: document upload, NL query, and human review of pending
 extractions (approve / reject / correct fields).
 """
+
 import requests
 import streamlit as st
 
@@ -65,6 +66,7 @@ else:
 
         if submitted:
             import json
+
             try:
                 corrections = json.loads(corrections_raw or "{}")
             except json.JSONDecodeError:

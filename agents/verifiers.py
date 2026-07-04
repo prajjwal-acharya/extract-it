@@ -24,4 +24,8 @@ def balance_arithmetic(opening: float, closing: float, transactions: list[float]
     """
     computed = round(opening + sum(transactions), 2)
     expected = round(closing, 2)
-    return {"valid": abs(computed - expected) < 0.01, "computed_closing": computed, "expected_closing": expected}
+    return {
+        "valid": abs(computed - expected) < 0.01,
+        "computed_closing": computed,
+        "expected_closing": expected,
+    }

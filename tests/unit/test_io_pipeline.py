@@ -19,9 +19,7 @@ def _make_temp_file(name: str, content: bytes = b"%PDF-1.4 test") -> str:
     return path
 
 
-def test_ingest_file_stores_object_and_creates_db_row(
-    minio_client, postgres_session
-) -> None:
+def test_ingest_file_stores_object_and_creates_db_row(minio_client, postgres_session) -> None:
     path = _make_temp_file("invoice_ABC123_20240101.pdf")
     try:
         with (
@@ -31,6 +29,7 @@ def test_ingest_file_stores_object_and_creates_db_row(
             doc_id = ingest_file(path)
 
         from db.models import Document
+
         doc = postgres_session.get(Document, doc_id)
         assert doc is not None
         assert doc.status == "queued"
@@ -39,9 +38,7 @@ def test_ingest_file_stores_object_and_creates_db_row(
         os.unlink(path)
 
 
-def test_ingest_file_parses_doc_type_from_filename(
-    minio_client, postgres_session
-) -> None:
+def test_ingest_file_parses_doc_type_from_filename(minio_client, postgres_session) -> None:
     path = _make_temp_file("bank_statement_XYZ_20231215.pdf")
     try:
         with (
@@ -51,6 +48,7 @@ def test_ingest_file_parses_doc_type_from_filename(
             doc_id = ingest_file(path)
 
         from db.models import Document
+
         doc = postgres_session.get(Document, doc_id)
         assert doc is not None
         assert doc.doc_type == "bank_statement"
@@ -58,9 +56,7 @@ def test_ingest_file_parses_doc_type_from_filename(
         os.unlink(path)
 
 
-def test_ingest_file_returns_document_id_string(
-    minio_client, postgres_session
-) -> None:
+def test_ingest_file_returns_document_id_string(minio_client, postgres_session) -> None:
     path = _make_temp_file("passport_P1234567_20240601.pdf")
     try:
         with (
@@ -89,7 +85,11 @@ def _make_doc(session, doc_id: str) -> Document:
 def _make_state(doc_id: str) -> dict:
     return {
         "document_id": doc_id,
-        "universal_schema": {"holder_name": "JOHN SMITH", "id_number": "AB123456", "expiry_date": "2030-01-01"},
+        "universal_schema": {
+            "holder_name": "JOHN SMITH",
+            "id_number": "AB123456",
+            "expiry_date": "2030-01-01",
+        },
         "classify_confidence": 0.95,
         "extract_confidence": 0.88,
         "validate_confidence": 0.92,
@@ -128,11 +128,7 @@ def test_write_output_appends_confidence_log(minio_client, postgres_session) -> 
     ):
         write_output(state)  # type: ignore[arg-type]
 
-    logs = (
-        postgres_session.query(ConfidenceLog)
-        .filter(ConfidenceLog.document_id == doc_id)
-        .all()
-    )
+    logs = postgres_session.query(ConfidenceLog).filter(ConfidenceLog.document_id == doc_id).all()
     agents = {log.agent for log in logs}
     assert agents == {"classify", "extract", "validate"}
     scores = {log.agent: log.score for log in logs}

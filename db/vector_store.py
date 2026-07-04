@@ -27,13 +27,15 @@ def upsert_embedding(
         if source is not None:
             existing.source = source
     else:
-        session.add(DocumentEmbedding(
-            document_id=document_id,
-            chunk_index=chunk_index,
-            chunk_text=chunk_text,
-            embedding=embedding,
-            source=source,
-        ))
+        session.add(
+            DocumentEmbedding(
+                document_id=document_id,
+                chunk_index=chunk_index,
+                chunk_text=chunk_text,
+                embedding=embedding,
+                source=source,
+            )
+        )
     session.commit()
 
 
@@ -48,7 +50,5 @@ def similarity_search(
     if doc_type is not None:
         q = q.join(Document).filter(Document.doc_type == doc_type)
     return (
-        q.order_by(DocumentEmbedding.embedding.cosine_distance(query_embedding))
-        .limit(top_k)
-        .all()
+        q.order_by(DocumentEmbedding.embedding.cosine_distance(query_embedding)).limit(top_k).all()
     )

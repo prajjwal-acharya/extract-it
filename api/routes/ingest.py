@@ -15,6 +15,7 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 def _run_pipeline(document_id: str, filename: str, object_key: str) -> None:
     try:
         from pipelines.graph import get_graph
+
         config = {"configurable": {"thread_id": document_id}}
         initial_state = {
             "document_id": document_id,
@@ -30,7 +31,9 @@ def _run_pipeline(document_id: str, filename: str, object_key: str) -> None:
 
 
 @router.post("/")
-async def ingest(file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()) -> dict:
+async def ingest(
+    file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()
+) -> dict:
     """Accept a document upload, store it, and trigger the pipeline as a background task."""
     # os.path.basename strips directory components — a raw client filename
     # joined into a path enables arbitrary file write (CWE-22).

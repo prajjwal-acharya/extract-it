@@ -95,6 +95,7 @@ def sample_pdf_bytes() -> bytes:
 # Stubs — implemented in later phases
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def passport_state(minio_client, sample_pdf_bytes) -> dict:
     """Return a pre-populated GraphState dict for a passport document (post-master_node)."""

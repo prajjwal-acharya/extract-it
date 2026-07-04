@@ -180,9 +180,9 @@ def test_normalize_canonicalizes_expiry_date() -> None:
     from pipelines.nodes.normalize import normalize_node
 
     cases = [
-        ("10/02/2020", "2020-02-10"),   # DD/MM/YYYY — dayfirst=True
+        ("10/02/2020", "2020-02-10"),  # DD/MM/YYYY — dayfirst=True
         ("09 JAN 2030", "2030-01-09"),  # human-readable month
-        ("2025-06-30", "2025-06-30"),   # already ISO — pass-through
+        ("2025-06-30", "2025-06-30"),  # already ISO — pass-through
     ]
     for raw, expected in cases:
         state: GraphState = {  # type: ignore[typeddict-item]
@@ -299,8 +299,10 @@ def test_extract_node_no_context_when_no_similar_docs() -> None:
 
 def test_tool_call_count_uses_add_reducer() -> None:
     import typing
+
     hints = typing.get_type_hints(GraphState, include_extras=True)
     assert typing.get_origin(hints["tool_call_count"]) is typing.Annotated
     args = typing.get_args(hints["tool_call_count"])
     import operator as op
+
     assert args[1] is op.add

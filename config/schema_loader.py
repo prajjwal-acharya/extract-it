@@ -9,7 +9,7 @@ _CACHE: dict[str, tuple[float, type[BaseModel]]] = {}
 
 _TYPE_MAP: dict[str, Any] = {
     "string": str,
-    "date": str,      # format/regex validation deferred to P4 (validate)
+    "date": str,  # format/regex validation deferred to P4 (validate)
     "float": float,
     "integer": int,
 }

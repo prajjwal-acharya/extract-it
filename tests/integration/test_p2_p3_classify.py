@@ -1,4 +1,5 @@
 """Integration seam P2↔P3: classification output feeds the extraction node."""
+
 import typing
 import unittest.mock as mock
 
