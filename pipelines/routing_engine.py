@@ -89,7 +89,9 @@ def _unknown_plan(confidence: float, reason: str) -> RoutingPlan:
 
 
 def _failure_plan(reason: str) -> RoutingPlan:
-    return _plan_from_entry(registry.get("UNKNOWN"), confidence=0.0, action=RoutingAction.FAILURE, reason=reason)
+    return _plan_from_entry(
+        registry.get("UNKNOWN"), confidence=0.0, action=RoutingAction.FAILURE, reason=reason
+    )
 
 
 class RoutingEngine:
@@ -125,7 +127,10 @@ class RoutingEngine:
 
         if raw_doc_type == "UNKNOWN":
             plan = _plan_from_entry(
-                entry, result.confidence, RoutingAction.UNKNOWN, reason="classifier_returned_unknown"
+                entry,
+                result.confidence,
+                RoutingAction.UNKNOWN,
+                reason="classifier_returned_unknown",
             )
             self._log(plan, time.monotonic() - t0)
             return plan

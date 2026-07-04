@@ -142,7 +142,9 @@ registry = DocumentRegistry(
             extraction_prompt_key="unknown",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,
-            confidence_policy=ConfidencePolicy(proceed_threshold=0.0),  # UNKNOWN always evaluates to UNKNOWN
+            confidence_policy=ConfidencePolicy(
+                proceed_threshold=0.0
+            ),  # UNKNOWN always evaluates to UNKNOWN
             rag_namespace="unknown",
         ),
     ]

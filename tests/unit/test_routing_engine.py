@@ -242,7 +242,11 @@ def test_routing_plan_contains_all_fields_needed_for_extraction() -> None:
 def test_classify_node_sets_routing_version_in_state() -> None:
     from pipelines.nodes.classify import classify_node
 
-    state: GraphState = {"filename": "passport_P001_20240101.pdf", "raw_bytes": b"%PDF", "document_id": "d1"}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "filename": "passport_P001_20240101.pdf",
+        "raw_bytes": b"%PDF",
+        "document_id": "d1",
+    }  # type: ignore[typeddict-item]
     fake = AgentResult(success=True, confidence=0.97, data={"doc_type": "passport"})
     with mock.patch("pipelines.nodes.classify.classify", return_value=fake):
         result = classify_node(state)
@@ -253,7 +257,11 @@ def test_classify_node_sets_routing_version_in_state() -> None:
 def test_classify_node_low_confidence_produces_unknown() -> None:
     from pipelines.nodes.classify import classify_node
 
-    state: GraphState = {"filename": "passport_P001_20240101.pdf", "raw_bytes": b"%PDF", "document_id": "d1"}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "filename": "passport_P001_20240101.pdf",
+        "raw_bytes": b"%PDF",
+        "document_id": "d1",
+    }  # type: ignore[typeddict-item]
     fake = AgentResult(success=True, confidence=0.30, data={"doc_type": "passport"})
     with mock.patch("pipelines.nodes.classify.classify", return_value=fake):
         result = classify_node(state)
@@ -267,7 +275,11 @@ def test_classify_node_low_confidence_produces_unknown() -> None:
 def test_classify_node_agent_failure_produces_failure_action() -> None:
     from pipelines.nodes.classify import classify_node
 
-    state: GraphState = {"filename": "passport_P001_20240101.pdf", "raw_bytes": b"%PDF", "document_id": "d1"}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "filename": "passport_P001_20240101.pdf",
+        "raw_bytes": b"%PDF",
+        "document_id": "d1",
+    }  # type: ignore[typeddict-item]
     fake = AgentResult(success=False, confidence=0.0, data={}, reason="connection_refused")
     with mock.patch("pipelines.nodes.classify.classify", return_value=fake):
         result = classify_node(state)
@@ -350,10 +362,16 @@ def test_graph_route_missing_context_to_unknown_handler() -> None:
 def test_unknown_handler_sets_structured_error() -> None:
     from pipelines.nodes.unknown_handler import unknown_handler_node
 
-    plan = _make_plan(action=RoutingAction.UNKNOWN, reason="confidence_below_threshold: 'passport' (0.300 < 0.70)")
+    plan = _make_plan(
+        action=RoutingAction.UNKNOWN, reason="confidence_below_threshold: 'passport' (0.300 < 0.70)"
+    )
     result = AgentResult(success=True, confidence=0.3, data={})
     ctx = make_classification_context(plan, result)
-    state: GraphState = {"document_id": "test-doc", "doc_type": "UNKNOWN", "classification_context": ctx}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "document_id": "test-doc",
+        "doc_type": "UNKNOWN",
+        "classification_context": ctx,
+    }  # type: ignore[typeddict-item]
 
     update = unknown_handler_node(state)
     assert "error" in update
@@ -367,7 +385,11 @@ def test_unknown_handler_handles_failure_action() -> None:
     plan = _make_plan(action=RoutingAction.FAILURE, reason="agent_failure: timeout", confidence=0.0)
     result = AgentResult(success=False, confidence=0.0, data={}, reason="timeout")
     ctx = make_classification_context(plan, result)
-    state: GraphState = {"document_id": "test-doc", "doc_type": "UNKNOWN", "classification_context": ctx}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "document_id": "test-doc",
+        "doc_type": "UNKNOWN",
+        "classification_context": ctx,
+    }  # type: ignore[typeddict-item]
 
     update = unknown_handler_node(state)
     assert "routing_failed" in update["error"]
@@ -377,7 +399,11 @@ def test_unknown_handler_handles_failure_action() -> None:
 def test_unknown_handler_handles_missing_context() -> None:
     from pipelines.nodes.unknown_handler import unknown_handler_node
 
-    state: GraphState = {"document_id": "test-doc", "doc_type": None, "classification_context": None}  # type: ignore[typeddict-item]
+    state: GraphState = {
+        "document_id": "test-doc",
+        "doc_type": None,
+        "classification_context": None,
+    }  # type: ignore[typeddict-item]
     update = unknown_handler_node(state)
     assert "routing_failed" in update["error"]
     assert "no_classification_context" in update["error"]

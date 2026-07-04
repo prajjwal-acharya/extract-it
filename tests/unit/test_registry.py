@@ -45,7 +45,15 @@ def test_registry_lookup_unknown_raises_key_error() -> None:
 
 
 def test_registry_exists_true_for_all_supported_types() -> None:
-    for doc_type in ("passport", "bank_statement", "salary_slip", "itr", "gst_invoice", "property_deed", "UNKNOWN"):
+    for doc_type in (
+        "passport",
+        "bank_statement",
+        "salary_slip",
+        "itr",
+        "gst_invoice",
+        "property_deed",
+        "UNKNOWN",
+    ):
         assert registry.exists(doc_type), f"expected {doc_type!r} in registry"
 
 
@@ -64,7 +72,15 @@ def test_registry_exists_false_for_arbitrary_string() -> None:
 
 def test_registry_all_contains_every_type() -> None:
     types = {e.document_type for e in registry.all()}
-    assert types == {"passport", "bank_statement", "salary_slip", "itr", "gst_invoice", "property_deed", "UNKNOWN"}
+    assert types == {
+        "passport",
+        "bank_statement",
+        "salary_slip",
+        "itr",
+        "gst_invoice",
+        "property_deed",
+        "UNKNOWN",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +150,9 @@ def test_registry_completeness() -> None:
     registry_schema_names = {e.schema_name for e in registry.all()}
     missing_from_registry = schema_names - registry_schema_names
     missing_schema_file = registry_schema_names - schema_names
-    assert not missing_from_registry, f"Schema YAMLs with no registry entry: {missing_from_registry}"
+    assert not missing_from_registry, (
+        f"Schema YAMLs with no registry entry: {missing_from_registry}"
+    )
     assert not missing_schema_file, f"Registry entries with no schema YAML: {missing_schema_file}"
 
 
