@@ -3,6 +3,7 @@ from pydantic import ValidationError
 from agents.base import AgentResult
 from config.schema_loader import load_schema_model
 from config.settings import settings
+from pipelines.registry import registry as _registry
 
 
 def validate(doc_type: str, extracted_fields: dict) -> AgentResult:
@@ -12,7 +13,7 @@ def validate(doc_type: str, extracted_fields: dict) -> AgentResult:
     No LLM call — deterministic, cheap, reuses the already-built schema model.
     """
     try:
-        model = load_schema_model(doc_type)
+        model = load_schema_model(_registry.schema_name(doc_type))
     except FileNotFoundError as e:
         return AgentResult(success=False, confidence=0.0, data={"issues": [str(e)]}, reason=str(e))
 

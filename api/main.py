@@ -10,6 +10,7 @@ from api.routes.ingest import router as ingest_router
 from api.routes.knowledge_graph import router as knowledge_graph_router
 from api.routes.query import router as query_router
 from api.routes.review import router as review_router
+from config.settings import settings
 from io_pipeline.orchestrator import IngestionOrchestrator
 from observability.langsmith_setup import setup_langsmith
 
@@ -45,8 +46,14 @@ async def lifespan(app):  # type: ignore[type-arg]
     global _watcher
     try:
         _orch = IngestionOrchestrator(dispatch_fn=_folder_dispatch)
-        _watcher = LocalWatchTrigger(WATCH_DIR)
-        _watcher.on_new_object(lambda path: _orch.ingest(open(path, "rb").read(), path))
+        _watcher = LocalWatchTrigger(WATCH_DIR, settle_secs=settings.WATCH_SETTLE_SECS)
+
+        def _read_and_ingest(path: str) -> None:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            _orch.ingest(data, path, source="folder_watch")
+
+        _watcher.on_new_object(_read_and_ingest)
         _watcher.start()
     except Exception:
         logging.getLogger(__name__).warning("Folder watcher not started", exc_info=True)

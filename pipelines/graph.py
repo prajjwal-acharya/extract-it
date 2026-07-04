@@ -13,7 +13,9 @@ from pipelines.nodes.master import master_node
 from pipelines.nodes.normalize import normalize_node
 from pipelines.nodes.op_a_retry import op_a_retry_node
 from pipelines.nodes.op_b_hitl import op_b_hitl_node
+from pipelines.nodes.unknown_handler import unknown_handler_node
 from pipelines.nodes.validate import validate_node
+from pipelines.registry import RoutingAction
 from pipelines.router import route_after_hitl, route_after_validate
 from pipelines.state import GraphState
 
@@ -22,6 +24,7 @@ log = logging.getLogger(__name__)
 _PHASE_MAP = {
     "master": "ingested",
     "classify": "classifying",
+    "unknown_handler": "routing_failed",
     "extract": "extracting",
     "validate": "validating",
     "op_a_retry": "retrying",
@@ -33,8 +36,6 @@ _PHASE_MAP = {
 
 def _stamp_phase(name: str, fn):
     def wrapped(state: GraphState) -> dict:
-        # Stamp before the node runs so write_output()'s terminal phase overwrite
-        # (completed/failed/rejected on the persist node) takes effect last.
         try:
             with session_scope() as session:
                 doc = session.get(Document, state["document_id"])
@@ -52,17 +53,36 @@ def _persist_node(state: GraphState) -> dict:
     return {}
 
 
+def _route_after_classify(state: GraphState) -> str:
+    """Route based on RoutingPlan.action — the graph never inspects AgentResult directly.
+
+    PROCEED → extract
+    UNKNOWN | FAILURE → unknown_handler (both terminate without extraction)
+    """
+    ctx = state.get("classification_context")
+    if ctx is not None and ctx.routing_plan.action == RoutingAction.PROCEED:
+        return "extract"
+    return "unknown_handler"
+
+
 def build_graph() -> CompiledStateGraph:
     """Construct and return the compiled LangGraph pipeline.
 
-    Topology: master -> classify -> extract -> validate -> route ->
-        normalize | op_a_retry -> validate | op_b_hitl -> normalize | persist -> END
+    Topology:
+        master → classify →[route]→ extract (PROCEED)
+                                  → unknown_handler (UNKNOWN | FAILURE)
+        unknown_handler → persist → END
+        extract → validate →[route]→ normalize | op_a_retry | op_b_hitl
+        op_a_retry → validate
+        op_b_hitl →[route]→ normalize | persist
+        normalize → persist → END
     """
     builder = StateGraph(GraphState)
 
     for name, node in [
         ("master", master_node),
         ("classify", classify_node),
+        ("unknown_handler", unknown_handler_node),
         ("extract", extract_node),
         ("validate", validate_node),
         ("normalize", normalize_node),
@@ -74,7 +94,13 @@ def build_graph() -> CompiledStateGraph:
 
     builder.set_entry_point("master")
     builder.add_edge("master", "classify")
-    builder.add_edge("classify", "extract")
+    builder.add_conditional_edges(
+        "classify",
+        _route_after_classify,
+        {"extract": "extract", "unknown_handler": "unknown_handler"},
+    )
+    builder.add_edge("unknown_handler", "persist")
+
     builder.add_edge("extract", "validate")
     builder.add_conditional_edges(
         "validate",
@@ -93,8 +119,6 @@ def build_graph() -> CompiledStateGraph:
     return builder.compile(checkpointer=get_checkpointer())
 
 
-# Lazy singleton — defers postgres connection until first pipeline invocation
-# so the module can be imported safely in tests without a live DB.
 _graph: CompiledStateGraph | None = None
 
 

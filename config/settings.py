@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     MAX_RETRIES: int = 2
     MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024  # 25 MB
     MAX_PDF_PAGES: int = 50
+    WATCH_SETTLE_SECS: float = 1.0
 
 
 settings = Settings()

@@ -15,5 +15,5 @@ def ingest_file(file_path: str) -> str:
         data = fh.read()
     filename = basename(file_path)
     orchestrator = IngestionOrchestrator()  # no dispatch_fn → pipeline not triggered
-    doc_id, _ = orchestrator.ingest(data, filename)
+    doc_id, _ = orchestrator.ingest(data, filename, source="shim")
     return doc_id

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 from agents.base import AgentResult
 from agents.llm_client import generate
+from pipelines.registry import registry as _registry
 
 
 class _ClassifyResponse(BaseModel):
@@ -9,9 +10,12 @@ class _ClassifyResponse(BaseModel):
     confidence: float
 
 
+# Derived from registry so adding a new doc type automatically updates the prompt.
+_ALLOWED_TYPES = ", ".join(
+    e.document_type for e in _registry.all() if e.document_type != "UNKNOWN"
+)
 _PROMPT = (
-    "Classify this document into exactly one type: "
-    "passport, bank_statement, salary_slip, itr, gst, property_deed. "
+    f"Classify this document into exactly one type: {_ALLOWED_TYPES}. "
     'Respond with JSON: {"doc_type": str, "confidence": float 0-1}.'
 )
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from typing import Callable
+
+from sqlalchemy.exc import IntegrityError
 
 from adapters.factory import get_object_store
 from adapters.object_store.base import ObjectStore
@@ -17,6 +20,11 @@ logger = logging.getLogger(__name__)
 # Type alias for the background dispatch callable.
 # Receives (document_id, safe_filename, object_key).
 DispatchFn = Callable[[str, str, str], None]
+
+
+class _DuplicateHashError(Exception):
+    def __init__(self, existing_id: str) -> None:
+        self.existing_id = existing_id
 
 
 class IngestionOrchestrator:
@@ -42,14 +50,41 @@ class IngestionOrchestrator:
     # Public API
     # ------------------------------------------------------------------
 
-    def ingest(self, data: bytes, original_filename: str) -> tuple[str, bool]:
+    def ingest(
+        self, data: bytes, original_filename: str, *, source: str = "unknown"
+    ) -> tuple[str, bool]:
         """Run the full ingestion sequence.
 
         Returns (document_id, is_duplicate).
         Raises ValidationError if the file is invalid.
         """
+        t0 = time.monotonic()
+        logger.info(
+            "event=UploadReceived filename=%r size=%d source=%s",
+            original_filename,
+            len(data),
+            source,
+        )
+
         # 1. Validate — raises ValidationError on failure
-        validated: ValidatedFile = self._validator.validate(data, original_filename)
+        logger.info("event=ValidationStarted")
+        try:
+            validated: ValidatedFile = self._validator.validate(data, original_filename)
+        except Exception as exc:
+            elapsed = time.monotonic() - t0
+            logger.info(
+                "event=IngestFailed reason=%s source=%s elapsed=%.3fs",
+                exc,
+                source,
+                elapsed,
+            )
+            raise
+        logger.info(
+            "event=ValidationSucceeded mime=%s ext=%s source=%s",
+            validated.mime_type,
+            validated.extension,
+            source,
+        )
 
         # 2. Identity
         hash_hex: str = compute_sha256(data)
@@ -57,7 +92,14 @@ class IngestionOrchestrator:
         # 3. Idempotency — return existing document_id if already ingested
         existing_id = self._find_by_hash(hash_hex)
         if existing_id is not None:
-            logger.info("duplicate document hash=%s existing_id=%s", hash_hex, existing_id)
+            elapsed = time.monotonic() - t0
+            logger.info(
+                "event=DuplicateDetected hash=%s existing_id=%s source=%s elapsed=%.3fs",
+                hash_hex,
+                existing_id,
+                source,
+                elapsed,
+            )
             return existing_id, True
 
         # 4. Secure naming
@@ -67,18 +109,58 @@ class IngestionOrchestrator:
 
         # 5. Persist to object store
         self._store.put(object_key, validated.data, content_type=validated.mime_type)
+        logger.info(
+            "event=ObjectStored object_key=%s hash=%s source=%s",
+            object_key,
+            hash_hex,
+            source,
+        )
 
-        # 6. Bootstrap DB row
-        self._bootstrap(
-            document_id=document_id,
-            safe_name=safe_name,
-            object_key=object_key,
-            validated=validated,
-            hash_hex=hash_hex,
+        # 6. Bootstrap DB row — roll back orphaned object on failure
+        try:
+            self._bootstrap(
+                document_id=document_id,
+                safe_name=safe_name,
+                object_key=object_key,
+                validated=validated,
+                hash_hex=hash_hex,
+            )
+        except _DuplicateHashError as dup:
+            self._safe_delete(object_key, reason="concurrent_duplicate")
+            elapsed = time.monotonic() - t0
+            logger.info(
+                "event=DuplicateDetected hash=%s existing_id=%s source=%s elapsed=%.3fs",
+                hash_hex,
+                dup.existing_id,
+                source,
+                elapsed,
+            )
+            return dup.existing_id, True
+        except Exception:
+            self._safe_delete(object_key, reason="db_failure")
+            elapsed = time.monotonic() - t0
+            logger.exception(
+                "event=IngestFailed object_key=%s hash=%s source=%s elapsed=%.3fs",
+                object_key,
+                hash_hex,
+                source,
+                elapsed,
+            )
+            raise
+
+        elapsed = time.monotonic() - t0
+        logger.info(
+            "event=DocumentCreated document_id=%s object_key=%s hash=%s source=%s elapsed=%.3fs",
+            document_id,
+            object_key,
+            hash_hex,
+            source,
+            elapsed,
         )
 
         # 7. Dispatch pipeline (optional — skipped in tests when dispatch_fn is None)
         if self._dispatch is not None:
+            logger.info("event=DispatchStarted document_id=%s source=%s", document_id, source)
             self._dispatch(document_id, safe_name, object_key)
 
         return document_id, False
@@ -86,6 +168,16 @@ class IngestionOrchestrator:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _safe_delete(self, object_key: str, *, reason: str) -> None:
+        """Delete the object and log but never propagate errors."""
+        try:
+            self._store.delete(object_key)
+            logger.info("event=OrphanCleaned object_key=%s reason=%s", object_key, reason)
+        except Exception:
+            logger.exception(
+                "event=OrphanCleanupFailed object_key=%s reason=%s", object_key, reason
+            )
 
     def _find_by_hash(self, hash_hex: str) -> str | None:
         """Return document_id of an existing document with this hash, or None."""
@@ -120,6 +212,12 @@ class IngestionOrchestrator:
             )
             session.add(doc)
             session.commit()
+        except IntegrityError:
+            session.rollback()
+            existing = session.query(Document).filter(Document.hash == hash_hex).first()
+            if existing is None:
+                raise  # re-raise if winner not found (shouldn't happen)
+            raise _DuplicateHashError(existing.id)
         except Exception:
             session.rollback()
             raise

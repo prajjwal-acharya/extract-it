@@ -8,6 +8,7 @@ from agents.llm_client import generate, generate_with_tools
 from agents.self_consistency import should_vote, vote
 from agents.verifiers import balance_arithmetic, mrz_checksum
 from config.schema_loader import load_schema_model
+from pipelines.registry import registry as _registry
 
 log = logging.getLogger(__name__)
 
@@ -52,8 +53,8 @@ _VERIFIER_DECLARATIONS = [
 
 _VERIFIER_REGISTRY = {"mrz_checksum": mrz_checksum, "balance_arithmetic": balance_arithmetic}
 
-# Doc-types that benefit from a verifier pass.
-_VERIFIABLE = {"passport", "bank_statement"}
+# Derived from registry — any entry with a non-empty verifier_profile gets a verification pass.
+_VERIFIABLE = frozenset(e.document_type for e in _registry.all() if e.verifier_profile)
 
 
 def _extract_once(
@@ -61,7 +62,7 @@ def _extract_once(
 ) -> AgentResult:
     """Single extraction pass — no self-consistency logic."""
     try:
-        model = load_schema_model(doc_type)
+        model = load_schema_model(_registry.schema_name(doc_type))
     except FileNotFoundError as e:
         return AgentResult(success=False, confidence=0.0, data={}, reason=str(e))
 

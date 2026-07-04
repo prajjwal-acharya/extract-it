@@ -1,0 +1,8 @@
+doc_type: unknown
+version: "1.0"
+fields:
+  - name: raw_text
+    type: string
+    required: false
+
+universal_mapping: {}

@@ -3,6 +3,8 @@ from typing import Annotated
 from typing_extensions import TypedDict
 import operator
 
+from pipelines.routing_engine import ClassificationContext
+
 
 def _keep_last(current: object, update: object) -> object:
     """Last-write-wins reducer.
@@ -20,9 +22,13 @@ class GraphState(TypedDict):
     object_key: str
     raw_bytes: bytes
 
-    # ── Classify node outputs (single writer — plain types) ─────────────────
+    # ── Classify node outputs ───────────────────────────────────────────────
     doc_type: str | None
     classify_confidence: float
+    # Full routing audit envelope; graph routing depends only on this.
+    classification_context: ClassificationContext | None
+    # Routing policy version that produced the RoutingPlan (audit trail).
+    routing_version: str | None
 
     # ── Extract node outputs ────────────────────────────────────────────────
     # extracted_fields is overwritten by op_a_retry on each retry pass, so

@@ -56,12 +56,13 @@ class ValidationService:
                 doc = fitz.open(stream=data, filetype="pdf")
             except Exception as exc:
                 raise ValidationError("pdf_corrupted") from exc
-
-            if doc.needs_pass:
-                raise ValidationError("pdf_password_protected")
-
-            if len(doc) > settings.MAX_PDF_PAGES:
-                raise ValidationError(f"pdf_too_many_pages:{len(doc)}")
+            try:
+                if doc.needs_pass:
+                    raise ValidationError("pdf_password_protected")
+                if len(doc) > settings.MAX_PDF_PAGES:
+                    raise ValidationError(f"pdf_too_many_pages:{len(doc)}")
+            finally:
+                doc.close()
 
         return ValidatedFile(
             data=data,

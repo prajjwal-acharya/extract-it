@@ -42,7 +42,7 @@ async def ingest(
 
     orchestrator = IngestionOrchestrator(dispatch_fn=dispatch)
     try:
-        document_id, is_duplicate = orchestrator.ingest(data, filename)
+        document_id, is_duplicate = orchestrator.ingest(data, filename, source="http")
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.reason)
 
