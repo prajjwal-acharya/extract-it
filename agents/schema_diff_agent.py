@@ -11,6 +11,11 @@ from db.models import SchemaVersion
 
 log = logging.getLogger(__name__)
 
+# Nested/array field schema evolution is unsupported — only top-level scalar
+# fields participate in discovery, diff, and relaxation. Diffing into array
+# items (e.g. transaction line-item sub-schemas) is a separate design decision
+# and is explicitly deferred.
+
 # Below this similarity, a discovered field is treated as genuinely new rather
 # than a naming variant of an existing field (e.g. "acct_holder" vs "account_holder").
 _MATCH_THRESHOLD = 0.82
@@ -58,11 +63,16 @@ def discover_fields(content: bytes, mime_type: str) -> dict[str, str]:
 def diff_schema(discovered: dict[str, str], active_fields: list[dict]) -> SchemaDiff:
     """Fuzzy-match discovered keys against active_fields; classify as addition or match.
 
-    Also flags active required fields with no fuzzy match among discovered keys
+    Also flags active required scalar fields with no fuzzy match among discovered keys
     as candidates for relaxation (instance-scoped absence, not a value error).
+
+    Array-type fields are excluded from both matching and relaxation — an array field
+    being absent from a flat discovery pass does not imply it should be made optional.
+    Nested item-level diffing is unsupported and deferred.
     """
-    active_names = [f["name"] for f in active_fields]
-    normalized_active = {name: normalize_key(name) for name in active_names}
+    # Only scalar (non-array) fields participate in matching and relaxation.
+    scalar_fields = [f for f in active_fields if f.get("type") != "array"]
+    normalized_active = {f["name"]: normalize_key(f["name"]) for f in scalar_fields}
 
     matched_active: set[str] = set()
     additions: list[dict] = []
@@ -83,7 +93,7 @@ def diff_schema(discovered: dict[str, str], active_fields: list[dict]) -> Schema
 
     relaxed_fields = [
         f["name"]
-        for f in active_fields
+        for f in scalar_fields
         if f.get("required", True) and f["name"] not in matched_active
     ]
 
@@ -108,7 +118,9 @@ def apply_diff(
     Auto-applied per prior decision — no HITL gate on schema evolution itself.
     """
     new_fields = [dict(f) for f in active_row.fields_json]
-    existing_names = {f["name"] for f in new_fields}
+    # Guard: array-type fields have nested structure; only collect names for flat scalar fields
+    # to avoid false-positive duplicate suppression or KeyErrors on array field dicts.
+    existing_names = {f["name"] for f in new_fields if f.get("type") != "array"}
 
     for addition in diff.additions:
         if addition["name"] not in existing_names:
