@@ -25,6 +25,8 @@ def write_output(state: GraphState) -> None:
     assert doc is not None, f"Document {state['document_id']} not found"
     doc.status = status
     doc.current_phase = status  # completed / failed / rejected overrides "finalizing" stamp
+    if state.get("doc_type"):
+        doc.doc_type = state["doc_type"]
     doc.universal_schema = state.get("universal_schema") or {}
     doc.extracted_fields = state.get("extracted_fields") or {}
 
