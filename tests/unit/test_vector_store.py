@@ -78,8 +78,11 @@ def test_similarity_search_orders_by_distance(postgres_session) -> None:
 
     query = _make_embedding(1.0)
     results = similarity_search(postgres_session, query, top_k=2, doc_type=dtype)
-    assert results[0].chunk_text == "close"
-    assert results[1].chunk_text == "far"
+    # results is list[tuple[DocumentEmbedding, float]]
+    assert results[0][0].chunk_text == "close"
+    assert results[1][0].chunk_text == "far"
+    # distances should be non-negative floats in order
+    assert results[0][1] <= results[1][1]
 
 
 def test_similarity_search_filters_by_doc_type(postgres_session) -> None:
@@ -98,6 +101,6 @@ def test_similarity_search_filters_by_doc_type(postgres_session) -> None:
 
     results = similarity_search(postgres_session, embedding, top_k=10, doc_type=passport_type)
     assert len(results) >= 1
-    doc_types = {r.document.doc_type for r in results}
+    doc_types = {row.document.doc_type for row, _ in results}
     assert doc_types == {passport_type}
-    assert all(r.chunk_text == "passport chunk" for r in results)
+    assert all(row.chunk_text == "passport chunk" for row, _ in results)

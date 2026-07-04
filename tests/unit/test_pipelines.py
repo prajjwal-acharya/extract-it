@@ -153,6 +153,7 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
 
     mock_row = mock.MagicMock(spec=DocumentEmbedding)
     mock_row.chunk_text = '{"surname": "EXAMPLE"}'
+    mock_row.document_id = "other-doc-id"
     fake_result = AgentResult(success=True, confidence=0.95, data={"surname": "SMITH"})
     fake_validate = AgentResult(success=True, confidence=0.95, data={"issues": []})
 
@@ -164,7 +165,9 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
 
     with (
         mock.patch("pipelines.nodes.op_a_retry.embed", return_value=[0.0] * 768),
-        mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[mock_row]),
+        mock.patch(
+            "pipelines.nodes.op_a_retry.similarity_search", return_value=[(mock_row, 0.1)]
+        ),
         mock.patch("pipelines.nodes.op_a_retry.extract", side_effect=capture_extract),
         mock.patch("pipelines.nodes.op_a_retry.validate", return_value=fake_validate),
         mock.patch("pipelines.nodes.op_a_retry.get_session"),
@@ -244,6 +247,7 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
 
     mock_row = mock.MagicMock(spec=DocumentEmbedding)
     mock_row.chunk_text = '{"surname": "EXAMPLE"}'
+    mock_row.document_id = "other-doc-id"
     fake_result = AgentResult(success=True, confidence=0.9, data={"surname": "EXAMPLE"})
 
     captured: dict = {}
@@ -254,7 +258,9 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
 
     with (
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
-        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[mock_row]),
+        mock.patch(
+            "pipelines.nodes.extract.similarity_search", return_value=[(mock_row, 0.1)]
+        ),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
         mock.patch("pipelines.nodes.extract.get_session"),
     ):

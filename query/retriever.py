@@ -8,5 +8,5 @@ def retrieve(query_embedding: list[float], top_k: int = 5) -> list[dict]:
     rows = similarity_search(session, query_embedding, top_k=top_k)
     return [
         {"document_id": r.document_id, "chunk_text": r.chunk_text, "chunk_index": r.chunk_index}
-        for r in rows
+        for r, _ in rows
     ]

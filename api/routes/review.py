@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from langgraph.types import Command
 from pydantic import BaseModel
-
 from agents.llm_client import embed
 from config.schema_loader import load_schema_model
 from config.settings import settings
+from db.models import ConfidenceLog, Document, RetrievalLog
 from db.session import get_session
 from db.vector_store import upsert_embedding
 
@@ -21,6 +21,63 @@ def _require_api_key(key: str | None = Depends(_api_key_header)) -> None:
         return  # key not configured — open in dev
     if key != settings.REVIEW_API_KEY:
         raise HTTPException(401, "Invalid or missing X-API-Key")
+
+
+@router.get("/pending")
+def list_pending_review() -> list[dict]:
+    """Documents currently in awaiting_review phase."""
+    session = get_session()
+    docs = (
+        session.query(Document)
+        .filter(Document.current_phase == "awaiting_review")
+        .order_by(Document.created_at.desc())
+        .all()
+    )
+    result = []
+    for doc in docs:
+        confidence_logs = (
+            session.query(ConfidenceLog)
+            .filter(ConfidenceLog.document_id == doc.id)
+            .order_by(ConfidenceLog.created_at)
+            .all()
+        )
+        references = (
+            session.query(RetrievalLog)
+            .filter(
+                RetrievalLog.document_id == doc.id,
+                RetrievalLog.stage == "retry",
+            )
+            .order_by(RetrievalLog.similarity_score.desc())
+            .all()
+        )
+        ref_list = []
+        for log in references:
+            ref_doc = session.get(Document, log.retrieved_document_id)
+            ref_list.append(
+                {
+                    "retrieved_document_id": log.retrieved_document_id,
+                    "filename": ref_doc.filename if ref_doc else None,
+                    "doc_type": ref_doc.doc_type if ref_doc else None,
+                    "similarity_score": log.similarity_score,
+                }
+            )
+        result.append(
+            {
+                "id": doc.id,
+                "filename": doc.filename,
+                "doc_type": doc.doc_type,
+                "status": doc.status,
+                "current_phase": doc.current_phase,
+                "extracted_fields": doc.extracted_fields,
+                "universal_schema": doc.universal_schema,
+                "confidence_logs": [
+                    {"agent": cl.agent, "score": cl.score, "reason": cl.reason}
+                    for cl in confidence_logs
+                ],
+                "references": ref_list,
+            }
+        )
+    return result
 
 
 class ReviewDecision(BaseModel):

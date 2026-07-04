@@ -24,7 +24,9 @@ def write_output(state: GraphState) -> None:
     doc = session.get(Document, state["document_id"])
     assert doc is not None, f"Document {state['document_id']} not found"
     doc.status = status
+    doc.current_phase = status  # completed / failed / rejected overrides "finalizing" stamp
     doc.universal_schema = state.get("universal_schema") or {}
+    doc.extracted_fields = state.get("extracted_fields") or {}
 
     for agent, confidence in (
         ("classify", state.get("classify_confidence")),

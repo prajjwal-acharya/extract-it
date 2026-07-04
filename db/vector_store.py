@@ -44,11 +44,10 @@ def similarity_search(
     query_embedding: list[float],
     top_k: int = 5,
     doc_type: str | None = None,
-) -> list:
-    """Top-k DocumentEmbedding rows by cosine distance, optionally filtered by doc_type."""
-    q = session.query(DocumentEmbedding)
+) -> list[tuple[DocumentEmbedding, float]]:
+    """Top-k (DocumentEmbedding, cosine_distance) tuples, optionally filtered by doc_type."""
+    distance_col = DocumentEmbedding.embedding.cosine_distance(query_embedding)
+    q = session.query(DocumentEmbedding).add_columns(distance_col)
     if doc_type is not None:
         q = q.join(Document).filter(Document.doc_type == doc_type)
-    return (
-        q.order_by(DocumentEmbedding.embedding.cosine_distance(query_embedding)).limit(top_k).all()
-    )
+    return list(q.order_by(distance_col).limit(top_k).all())

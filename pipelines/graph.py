@@ -1,7 +1,11 @@
+import logging
+
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from db.checkpointer import get_checkpointer
+from db.models import Document
+from db.session import get_session
 from io_pipeline.output_writer import write_output
 from pipelines.nodes.classify import classify_node
 from pipelines.nodes.extract import extract_node
@@ -12,6 +16,37 @@ from pipelines.nodes.op_b_hitl import op_b_hitl_node
 from pipelines.nodes.validate import validate_node
 from pipelines.router import route_after_hitl, route_after_validate
 from pipelines.state import GraphState
+
+log = logging.getLogger(__name__)
+
+_PHASE_MAP = {
+    "master": "ingested",
+    "classify": "classifying",
+    "extract": "extracting",
+    "validate": "validating",
+    "op_a_retry": "retrying",
+    "op_b_hitl": "awaiting_review",
+    "normalize": "normalizing",
+    "persist": "finalizing",
+}
+
+
+def _stamp_phase(name: str, fn):
+    def wrapped(state: GraphState) -> dict:
+        result = fn(state)
+        try:
+            session = get_session()
+            doc = session.get(Document, state["document_id"])
+            if doc is not None:
+                doc.current_phase = _PHASE_MAP.get(name, name)
+                session.commit()
+        except Exception:
+            log.warning(
+                "phase stamp failed for node=%s doc=%s", name, state.get("document_id")
+            )
+        return result
+
+    return wrapped
 
 
 def _persist_node(state: GraphState) -> dict:
@@ -37,7 +72,7 @@ def build_graph() -> CompiledStateGraph:
         ("op_b_hitl", op_b_hitl_node),
         ("persist", _persist_node),
     ]:
-        builder.add_node(name, node)
+        builder.add_node(name, _stamp_phase(name, node))
 
     builder.set_entry_point("master")
     builder.add_edge("master", "classify")

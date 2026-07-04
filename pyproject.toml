@@ -38,6 +38,7 @@ dependencies = [
     "watchdog>=4.0.0",
     # Frontend
     "streamlit>=1.36.0",
+    "streamlit-agraph>=0.0.45",
     # Document parsing
     "pypdf>=4.2.0",
     # Config / schema files
