@@ -41,9 +41,7 @@ def _stamp_phase(name: str, fn):
                 doc.current_phase = _PHASE_MAP.get(name, name)
                 session.commit()
         except Exception:
-            log.warning(
-                "phase stamp failed for node=%s doc=%s", name, state.get("document_id")
-            )
+            log.warning("phase stamp failed for node=%s doc=%s", name, state.get("document_id"))
         return result
 
     return wrapped

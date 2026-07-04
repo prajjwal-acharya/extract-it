@@ -13,7 +13,7 @@ def test_retrieve_returns_list_of_chunk_dicts(postgres_session) -> None:
 
     with (
         mock.patch("query.retriever.get_session", return_value=postgres_session),
-        mock.patch("query.retriever.similarity_search", return_value=[fake_row]),
+        mock.patch("query.retriever.similarity_search", return_value=[(fake_row, 0.1)]),
     ):
         results = retrieve([0.1] * 768)
 
@@ -27,7 +27,8 @@ def test_retrieve_returns_list_of_chunk_dicts(postgres_session) -> None:
 def test_retrieve_respects_top_k_limit(postgres_session) -> None:
     """retrieve() passes top_k through to similarity_search."""
     fake_rows = [
-        mock.MagicMock(document_id=f"doc-{i}", chunk_text="{}", chunk_index=0) for i in range(3)
+        (mock.MagicMock(document_id=f"doc-{i}", chunk_text="{}", chunk_index=0), 0.1 * i)
+        for i in range(3)
     ]
 
     with (

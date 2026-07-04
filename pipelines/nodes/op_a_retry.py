@@ -61,9 +61,7 @@ def op_a_retry_node(state: GraphState) -> dict:
     raw_bytes = state.get("raw_bytes") or get_object_store().get(state["object_key"])
     mime_type = mime_from_filename(state["filename"])
 
-    schema_version = _run_schema_discovery(
-        session, doc_type, raw_bytes, mime_type, document_id
-    )
+    schema_version = _run_schema_discovery(session, doc_type, raw_bytes, mime_type, document_id)
 
     query_text = json.dumps(state.get("extracted_fields") or {})
     similar = similarity_search(

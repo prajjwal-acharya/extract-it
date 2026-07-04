@@ -11,8 +11,14 @@ import streamlit as st
 API_BASE = "http://app:8000"
 
 _DOC_TYPE_COLORS = [
-    "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
-    "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+    "#4e79a7",
+    "#f28e2b",
+    "#e15759",
+    "#76b7b2",
+    "#59a14f",
+    "#edc948",
+    "#b07aa1",
+    "#ff9da7",
 ]
 
 
@@ -49,7 +55,9 @@ elif panel == "Documents":
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        status_filter = st.selectbox("Filter by status", ["", "pending", "completed", "failed", "rejected"])
+        status_filter = st.selectbox(
+            "Filter by status", ["", "pending", "completed", "failed", "rejected"]
+        )
     with col2:
         doc_type_filter = st.text_input("Filter by doc_type")
     with col3:
