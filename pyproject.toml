@@ -41,6 +41,7 @@ dependencies = [
     "streamlit-agraph>=0.0.45",
     # Document parsing
     "pypdf>=4.2.0",
+    "pymupdf>=1.24.0",
     # Config / schema files
     "pyyaml>=6.0.1",
     # Date parsing for universal schema canonicalization

@@ -1,7 +1,7 @@
 from agents.extract_agent import extract
 from agents.llm_client import embed
 from db.models import RetrievalLog
-from db.session import session_scope
+from db.session import get_session
 from db.vector_store import similarity_search
 from pipelines.state import GraphState
 from shared.utils.mime import mime_from_filename
@@ -13,7 +13,8 @@ def extract_node(state: GraphState) -> dict:
     mime_type = mime_from_filename(state["filename"])
     document_id = state["document_id"]
 
-    with session_scope() as session:
+    session = get_session()
+    try:
         similar = similarity_search(
             session,
             embed(doc_type or "document", task_type="RETRIEVAL_QUERY"),
@@ -33,6 +34,12 @@ def extract_node(state: GraphState) -> dict:
                     similarity_score=1 - distance,
                 )
             )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
     result = extract(state["raw_bytes"], mime_type, doc_type, context=context)
     update: dict = {
