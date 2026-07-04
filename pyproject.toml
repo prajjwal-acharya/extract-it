@@ -66,7 +66,7 @@ dev = [
 exclude = ["scripts/"]
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "testcontainers.*"]
+module = ["pgvector.*", "testcontainers.*", "streamlit_agraph.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
