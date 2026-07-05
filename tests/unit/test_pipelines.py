@@ -8,7 +8,6 @@ from pipelines.resolution.planner import ResolutionPlanner
 from pipelines.router import route_after_executor
 from pipelines.state import GraphState
 from pipelines.truth_engine.models import (
-    EvidenceBundle,
     ExtractionResult,
     FieldValidationReport,
     PersistenceDecision,

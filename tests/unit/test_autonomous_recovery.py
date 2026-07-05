@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
-
 from pipelines.resolution.better_retrieval import BetterRetrievalStrategy
 from pipelines.resolution.directives import Directive, DirectiveEngine
 from pipelines.resolution.image_preprocess import ImagePreprocessStrategy
@@ -213,7 +211,7 @@ class TestDirectiveEngineToPromptInstructions:
         text = self.engine.to_prompt_instructions(
             [Directive.FOCUS_MRZ, Directive.RECHECK_EXTRACTION]
         )
-        lines = [l for l in text.split("\n") if l.strip()]
+        lines = [line for line in text.split("\n") if line.strip()]
         assert len(lines) >= 2
 
     def test_empty_directive_list_produces_empty_string(self) -> None:
@@ -314,7 +312,6 @@ class TestBetterRetrievalStrategy:
     def test_verifier_failure_produces_recheck_query(self) -> None:
         report = _make_report(verifier_names_failed=["mrz_check"])
         queries, _, _ = self.strategy.build_queries(report, "passport")
-        combined = " ".join(queries)
         # RECHECK_EXTRACTION directive maps to re-extraction query fragment
         assert len(queries) >= 1
 
@@ -542,7 +539,6 @@ class TestPlannerDeduplication:
 
     def test_image_preprocess_deduped_per_document_not_per_variant(self) -> None:
         """IMAGE_PREPROCESS tried once per document regardless of failure pattern."""
-        report_a = _make_report(final_confidence=0.55)
         report_b = _make_report(required_fields_missing=["passport_number"])
         variant_b = failure_variant(report_b)
 

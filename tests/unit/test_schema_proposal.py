@@ -10,8 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
-
 from agents.schema_diff_agent import SchemaDiff, diff_schema, normalize_key, propose_diff
 from pipelines.learning.schema_proposal import ProposalStatus, SchemaProposal
 

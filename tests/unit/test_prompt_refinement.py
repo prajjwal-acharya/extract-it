@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import unittest.mock as mock
 
-import pytest
-
 from pipelines.resolution.models import (
     ExecutionRecord,
     PlannerBundle,
@@ -490,7 +488,6 @@ class TestDuplicateRefinementPrevention:
 
     def test_image_preprocess_tried_only_once_per_document(self) -> None:
         """IMAGE_PREPROCESS dedup is variant-agnostic — tried once regardless of failure type."""
-        report_a = _make_report(final_confidence=0.55)   # low_confidence
         report_b = _make_report(required_fields_missing=["passport_number"])  # missing_fields
 
         prior_proc = ExecutionRecord(

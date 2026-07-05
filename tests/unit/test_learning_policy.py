@@ -10,8 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
-
 from pipelines.learning.policy import LearningDecision, LearningPolicy
 from pipelines.resolution.models import ExecutionRecord, ResolutionDecision, Strategy
 from pipelines.truth_engine.models import (

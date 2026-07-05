@@ -1218,7 +1218,7 @@ def test_output_writer_logs_truth_engine_confidence(minio_client, postgres_sessi
     agents = {log.agent for log in logs}
     assert "truth_engine" in agents
     assert "validate" not in agents
-    te_log = next(l for l in logs if l.agent == "truth_engine")
+    te_log = next(log for log in logs if log.agent == "truth_engine")
     assert te_log.score == pytest.approx(0.88)
 
 

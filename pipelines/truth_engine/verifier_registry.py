@@ -3,6 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from agents.verifiers import (
+    ay_fy_consistency,
+    balance_arithmetic,
+    deed_date_consistency,
+    gross_consistency,
+    gstin_checksum,
+    invoice_total_consistency,
+    mrz_checksum,
+    pan_validation,
+    passport_date_consistency,
+    statement_period_ordering,
+)
+
 MAX_TOOL_CALLS = 3
 VERIFIER_VERSION = "1.0"
 
@@ -200,19 +213,6 @@ class VerifierRegistry:
     def all_doc_types(self) -> list[str]:
         return list(self._registry.keys())
 
-
-from agents.verifiers import (
-    ay_fy_consistency,
-    balance_arithmetic,
-    deed_date_consistency,
-    gross_consistency,
-    gstin_checksum,
-    invoice_total_consistency,
-    mrz_checksum,
-    pan_validation,
-    passport_date_consistency,
-    statement_period_ordering,
-)
 
 verifier_registry = VerifierRegistry()
 

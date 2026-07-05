@@ -16,11 +16,9 @@ import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.deps import get_db
 from api.routes.analytics import router as analytics_router
 from api.routes.documents import router as documents_router
 from api.routes.search import router as search_router
@@ -576,7 +574,7 @@ class TestExplainEndpoint:
 
 
 class TestSemanticSearch:
-    def _make_search_session(self, doc: Document, emb: DocumentEmbedding):
+    def _make_search_session(self, doc: SimpleNamespace, emb: SimpleNamespace):
         session = mock.MagicMock()
         session.get.return_value = doc
         return session

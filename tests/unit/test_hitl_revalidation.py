@@ -18,7 +18,6 @@ from pipelines.learning.reviewer_payload import ReviewerPayload
 from pipelines.resolution.models import (
     ExecutionRecord,
     ResolutionDecision,
-    RetryPlan,
     Strategy,
 )
 from pipelines.truth_engine.models import (
