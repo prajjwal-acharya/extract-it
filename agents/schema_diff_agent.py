@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import json
 import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from pipelines.learning.schema_proposal import SchemaProposal
 
 from agents.llm_client import generate
 from db.models import SchemaVersion
@@ -111,14 +117,14 @@ def propose_diff(
     active_row: SchemaVersion,
     diff: SchemaDiff,
     origin_document_id: str,
-) -> "SchemaProposal":
+) -> SchemaProposal:
     """Create a SchemaProposal from a non-empty diff without writing to the database.
 
     The proposal is returned to the caller (stored in GraphState) and requires
     explicit human approval before apply_diff() is called to activate it.
     No SchemaVersion is written here.
     """
-    from pipelines.learning.schema_proposal import SchemaProposal
+    from pipelines.learning.schema_proposal import SchemaProposal  # runtime only
 
     return SchemaProposal(
         doc_type=active_row.doc_type,
