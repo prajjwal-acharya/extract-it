@@ -209,9 +209,10 @@ def test_planner_routes_to_accept_when_completed() -> None:
     assert decision.strategy == Strategy.ACCEPT
 
 
-def test_planner_routes_to_retry_when_confidence_low_and_retries_remain() -> None:
+def test_planner_routes_to_prompt_refinement_when_confidence_low_and_retries_remain() -> None:
+    """Phase 5.3: first low-confidence failure → PROMPT_REFINEMENT before generic RETRY."""
     decision = _plan(_make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=0)
-    assert decision.strategy == Strategy.RETRY
+    assert decision.strategy == Strategy.PROMPT_REFINEMENT
 
 
 def test_planner_routes_to_hitl_when_retries_exhausted() -> None:
@@ -244,6 +245,16 @@ def test_route_after_executor_retry_goes_to_op_a_retry() -> None:
     state: GraphState = {  # type: ignore[typeddict-item]
         "resolution_decision": ResolutionDecision(
             strategy=Strategy.RETRY, reason="low_confidence", requires_human=False
+        ),
+    }
+    assert route_after_executor(state) == "op_a_retry"
+
+
+def test_route_after_executor_prompt_refinement_goes_to_op_a_retry() -> None:
+    """Phase 5.3: PROMPT_REFINEMENT routes to op_a_retry (same as RETRY)."""
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.PROMPT_REFINEMENT, reason="refinement scheduled", requires_human=False
         ),
     }
     assert route_after_executor(state) == "op_a_retry"

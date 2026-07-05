@@ -34,10 +34,14 @@ def _parse_envelope(raw: str, doc_type: str) -> tuple[dict, float]:
 
 
 def _extract_once(
-    content: bytes, mime_type: str, doc_type: str, context: str | None = None
+    content: bytes,
+    mime_type: str,
+    doc_type: str,
+    context: str | None = None,
+    additional_instructions: str | None = None,
 ) -> AgentResult:
     """Single open-extraction pass. Returns AgentResult for internal self-consistency use."""
-    prompt = build_extraction_prompt(doc_type, context)
+    prompt = build_extraction_prompt(doc_type, context, additional_instructions)
     try:
         raw = generate(prompt, image_bytes=content, mime_type=mime_type)
         fields, confidence = _parse_envelope(raw, doc_type)
@@ -52,13 +56,16 @@ def extract(
     doc_type: str,
     context: str | None = None,
     retrieval_metadata: dict | None = None,
+    additional_instructions: str | None = None,
 ) -> ExtractionResult:
     """Extract all meaningful fields from the document.
 
     Applies self-consistency voting when extraction confidence is borderline.
-    Deterministic verification is NOT performed here — that is Phase 4's responsibility.
+    additional_instructions, when provided, appends focused guidance from
+    PromptRefinementStrategy to the base prompt — used only on refined retry passes.
+    Deterministic verification is NOT performed here — Phase 4 owns that.
     """
-    first = _extract_once(content, mime_type, doc_type, context)
+    first = _extract_once(content, mime_type, doc_type, context, additional_instructions)
 
     if not first.success:
         return ExtractionResult(
@@ -80,7 +87,10 @@ def extract(
             retrieval_metadata=retrieval_metadata,
         )
 
-    samples = [first] + [_extract_once(content, mime_type, doc_type, context) for _ in range(2)]
+    samples = [first] + [
+        _extract_once(content, mime_type, doc_type, context, additional_instructions)
+        for _ in range(2)
+    ]
     voted = vote(samples)
     return ExtractionResult(
         fields=voted.data,

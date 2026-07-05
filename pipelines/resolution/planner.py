@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from config.settings import settings
 from pipelines.resolution.models import ExecutionRecord, PlannerBundle, ResolutionDecision, RetryPlan, Strategy
+from pipelines.resolution.prompt_refinement import failure_variant
 from pipelines.truth_engine.models import TruthReport, VerificationReport
 
 
@@ -17,16 +18,20 @@ class ResolutionPlanner:
     that adding a new strategy only requires adding a new rule here.
 
     Rule priority (evaluated in order, first match wins):
-      1. No TruthReport available         → HITL (safe fallback)
-      2. Retry budget exhausted           → HITL
-      3. All signals green                → ACCEPT
-      4. Deterministic verifier failure   → RETRY
-      5. Required fields missing          → RETRY
-      6. Schema coverage insufficient     → RETRY
-      7. Extraction confidence too low    → RETRY
+      1. No TruthReport available              → HITL (safe fallback)
+      2. All signals green                     → ACCEPT (evaluated before budget — a
+                                                  successful extraction after the last
+                                                  retry is still accepted, not HITL'd)
+      3. Retry budget exhausted                → HITL
+      4. Failure is refineable, not yet tried  → PROMPT_REFINEMENT (Phase 5.3)
+      5. Deterministic verifier failure        → RETRY (refinement already tried)
+      6. Required fields missing               → RETRY (refinement already tried)
+      7. Schema coverage insufficient          → RETRY (refinement already tried)
+      8. Extraction confidence too low         → RETRY (refinement already tried)
 
-    Future autonomous strategies (PROMPT_REFINEMENT, BETTER_RETRIEVAL, etc.)
-    slot in between rules 4–7 without changing the interface or existing rules.
+    To add a new autonomous strategy: insert a new rule between 4 and 5 following
+    the same pattern — check history for duplicates, return the new Strategy.
+    The interface (PlannerBundle → ResolutionDecision) is unchanged.
     """
 
     def __init__(
@@ -53,18 +58,8 @@ class ResolutionPlanner:
                 requires_human=True,
             )
 
-        # Rule 2: Budget exhausted — before evaluating evidence
-        if bundle.remaining_budget <= 0:
-            return ResolutionDecision(
-                strategy=Strategy.HITL,
-                reason=(
-                    f"Retry budget exhausted after {bundle.retry_count} attempt"
-                    f"{'s' if bundle.retry_count != 1 else ''}."
-                ),
-                requires_human=True,
-            )
-
-        # Rule 3: Acceptance — all evidence signals are green
+        # Rule 2: Acceptance — all evidence signals are green (evaluated before budget check
+        # so a successful extraction after exhausting retries is still accepted).
         failed_verifiers = self._failed_verifiers(truth_report)
         above_threshold = truth_report.final_confidence >= self._confidence_threshold
         sufficient_coverage = (
@@ -85,8 +80,48 @@ class ResolutionPlanner:
                 learning_candidate=True,
             )
 
-        # Rules 4–7: Classify the failure and schedule a retry
+        # Rule 3: Budget exhausted — document failed and no retries remain
+        if bundle.remaining_budget <= 0:
+            return ResolutionDecision(
+                strategy=Strategy.HITL,
+                reason=(
+                    f"Retry budget exhausted after {bundle.retry_count} attempt"
+                    f"{'s' if bundle.retry_count != 1 else ''}."
+                ),
+                requires_human=True,
+            )
+
+        # Rule 4: PROMPT_REFINEMENT — if this failure pattern has not been refined yet
         failure_reason = self._classify_failure(truth_report)
+        variant = failure_variant(truth_report, self._coverage_threshold)
+        already_refined = any(
+            r.strategy == Strategy.PROMPT_REFINEMENT
+            and r.strategy_metadata.get("prompt_variant") == variant
+            for r in bundle.execution_history
+        )
+        if not already_refined:
+            prior_variants = [
+                r.strategy_metadata.get("prompt_variant", "")
+                for r in bundle.execution_history
+                if r.strategy == Strategy.PROMPT_REFINEMENT
+            ]
+            retry_plan = RetryPlan(
+                attempt_number=bundle.retry_count + 1,
+                reason=failure_reason,
+                retrieval_strategy="similarity_search",
+                prompt_strategy="refined",
+                refinement_reason=failure_reason,
+                prompt_variant=variant,
+                refinement_history=[v for v in prior_variants if v],
+            )
+            return ResolutionDecision(
+                strategy=Strategy.PROMPT_REFINEMENT,
+                reason=f"Prompt refinement scheduled: {failure_reason}",
+                requires_human=False,
+                retry_plan=retry_plan,
+            )
+
+        # Rules 5–8: Generic RETRY — refinement was already tried for this pattern
         retry_plan = RetryPlan(
             attempt_number=bundle.retry_count + 1,
             reason=failure_reason,

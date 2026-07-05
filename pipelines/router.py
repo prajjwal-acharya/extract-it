@@ -19,7 +19,7 @@ def route_after_executor(state: GraphState) -> str:
         return "op_b_hitl"
     if decision.strategy == Strategy.ACCEPT:
         return "normalize"
-    if decision.strategy == Strategy.RETRY:
+    if decision.strategy in (Strategy.RETRY, Strategy.PROMPT_REFINEMENT):
         return "op_a_retry"
     if decision.strategy == Strategy.REJECT:
         return "persist"

@@ -9,12 +9,24 @@ Return a JSON object with this exact structure:
 overall_confidence reflects your overall confidence in the extraction quality.
 Return only valid JSON with no additional explanation."""
 
+_REFINEMENT_HEADER = "--- Focused extraction guidance (based on previous attempt) ---"
+_REFINEMENT_FOOTER = "--- End of focused guidance ---"
 
-def build_extraction_prompt(doc_type: str, context: str | None = None) -> str:
+
+def build_extraction_prompt(
+    doc_type: str,
+    context: str | None = None,
+    additional_instructions: str | None = None,
+) -> str:
     """Build a schema-guided open extraction prompt for doc_type.
 
     The reference schema provides field guidance only — it never restricts
     what Gemini is allowed to extract.  All discovered fields must be returned.
+
+    additional_instructions, when provided, is appended after the base schema
+    guidance and before the output envelope instruction. It contains focused,
+    evidence-derived hints from PromptRefinementStrategy for the retry pass.
+    The base prompt is never rewritten.
     """
     required_fields, optional_fields = load_reference_fields(doc_type)
 
@@ -38,6 +50,14 @@ def build_extraction_prompt(doc_type: str, context: str | None = None) -> str:
         lines += [
             "Extract every field you can identify.",
             "There is no predefined field list — capture everything meaningful.",
+        ]
+
+    if additional_instructions:
+        lines += [
+            "",
+            _REFINEMENT_HEADER,
+            additional_instructions,
+            _REFINEMENT_FOOTER,
         ]
 
     lines += ["", _ENVELOPE_INSTRUCTION]

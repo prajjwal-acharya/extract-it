@@ -6,7 +6,6 @@ from pipelines.resolution.models import ExecutionRecord, ResolutionDecision, Str
 
 _UNIMPLEMENTED: frozenset[Strategy] = frozenset(
     {
-        Strategy.PROMPT_REFINEMENT,
         Strategy.BETTER_RETRIEVAL,
         Strategy.IMAGE_PREPROCESS,
         Strategy.MODEL_ESCALATION,
@@ -16,6 +15,7 @@ _UNIMPLEMENTED: frozenset[Strategy] = frozenset(
 _OUTCOME: dict[Strategy, str] = {
     Strategy.ACCEPT: "accepted",
     Strategy.RETRY: "retry_scheduled",
+    Strategy.PROMPT_REFINEMENT: "refinement_scheduled",
     Strategy.HITL: "hitl_required",
     Strategy.REJECT: "rejected",
 }
@@ -24,15 +24,15 @@ _OUTCOME: dict[Strategy, str] = {
 class StrategyExecutor:
     """Executes the strategy chosen by ResolutionPlanner.
 
-    Only RETRY is fully implemented in Phase 5.2. For RETRY, the executor
-    records the attempt and the graph router sends control to op_a_retry_node
-    (which contains the existing retry implementation — unchanged from Phase 4).
+    RETRY and PROMPT_REFINEMENT both route to op_a_retry_node via the graph.
+    The difference is that PROMPT_REFINEMENT also sets refined_prompt in state
+    (handled by strategy_executor_node, not here) so op_a_retry knows to append
+    the focused guidance to the base prompt.
 
     ACCEPT, HITL, and REJECT are recorded; actual work happens in downstream
     graph nodes (normalize, op_b_hitl, persist).
 
-    Future strategies raise NotImplementedError. They are architecture
-    placeholders and must not be called until their phase is implemented.
+    Remaining placeholder strategies raise NotImplementedError.
     """
 
     def execute(
@@ -62,6 +62,12 @@ class StrategyExecutor:
                 "retrieval_strategy": decision.retry_plan.retrieval_strategy,
                 "prompt_strategy": decision.retry_plan.prompt_strategy,
             }
+            if decision.retry_plan.prompt_variant is not None:
+                strategy_metadata["prompt_variant"] = decision.retry_plan.prompt_variant
+            if decision.retry_plan.refinement_reason is not None:
+                strategy_metadata["refinement_reason"] = decision.retry_plan.refinement_reason
+            if decision.retry_plan.refinement_history:
+                strategy_metadata["refinement_history"] = decision.retry_plan.refinement_history
 
         record = ExecutionRecord(
             strategy=decision.strategy,

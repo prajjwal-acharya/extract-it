@@ -79,7 +79,16 @@ def op_a_retry_node(state: GraphState) -> dict:
                 )
             )
 
-    result = extract(raw_bytes, mime_type, doc_type, context=context)
+    refined_prompt = state.get("refined_prompt")
+    additional_instructions = refined_prompt.additional_instructions if refined_prompt else None
+
+    result = extract(
+        raw_bytes,
+        mime_type,
+        doc_type,
+        context=context,
+        additional_instructions=additional_instructions,
+    )
 
     return {
         "extracted_fields": result.fields,
@@ -87,4 +96,5 @@ def op_a_retry_node(state: GraphState) -> dict:
         "extraction_result": result,
         "retry_count": state["retry_count"] + 1,
         "schema_version": schema_version,
+        "refined_prompt": None,  # consumed — clear so it doesn't persist to next pass
     }

@@ -244,26 +244,80 @@ def test_planner_accept_no_retry_plan() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_planner_retry_when_failed_and_retries_remain() -> None:
+def test_planner_prompt_refinement_on_first_failure() -> None:
+    """First failure → PROMPT_REFINEMENT (not RETRY) — refinement tried before generic retry."""
     report = _make_truth_report("failed", 0.60)
     decision = _plan(report, retry_count=0)
+    assert decision.strategy == Strategy.PROMPT_REFINEMENT
+    assert decision.requires_human is False
+    assert decision.retry_plan is not None
+    assert decision.retry_plan.prompt_strategy == "refined"
+    assert decision.retry_plan.prompt_variant is not None
+
+
+def test_planner_retry_after_refinement_already_tried() -> None:
+    """Same failure pattern after PROMPT_REFINEMENT was already tried → RETRY."""
+    from pipelines.resolution.prompt_refinement import failure_variant
+
+    report = _make_truth_report("failed", 0.60)
+    variant = failure_variant(report)
+    # Simulate a previous PROMPT_REFINEMENT attempt for this variant in history
+    prior_refinement = ExecutionRecord(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        timestamp="2024-01-01T00:00:00Z",
+        outcome="refinement_scheduled",
+        confidence_before=0.60,
+        confidence_after=None,
+        strategy_metadata={"prompt_variant": variant},
+    )
+    decision = _plan(report, retry_count=1, execution_history=[prior_refinement])
     assert decision.strategy == Strategy.RETRY
     assert decision.requires_human is False
 
 
-def test_planner_retry_when_verification_failed_and_retries_remain() -> None:
-    report = _make_truth_report("verification_failed")  # includes failed VerificationReport
-    decision = _plan(report, retry_count=0)
+def test_planner_retry_after_verification_failed_refinement_tried() -> None:
+    """PROMPT_REFINEMENT for verifier failure already tried → RETRY."""
+    from pipelines.resolution.prompt_refinement import failure_variant
+
+    report = _make_truth_report("verification_failed")
+    variant = failure_variant(report)
+    prior = ExecutionRecord(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        timestamp="2024-01-01T00:00:00Z",
+        outcome="refinement_scheduled",
+        confidence_before=0.90,
+        confidence_after=None,
+        strategy_metadata={"prompt_variant": variant},
+    )
+    decision = _plan(report, retry_count=1, execution_history=[prior])
     assert decision.strategy == Strategy.RETRY
 
 
-def test_planner_retry_populates_retry_plan() -> None:
+def test_planner_retry_plan_populated() -> None:
+    """Retry plan must be populated for both PROMPT_REFINEMENT and RETRY strategies."""
+    from pipelines.resolution.prompt_refinement import failure_variant
+
     report = _make_truth_report("failed", 0.60)
-    decision = _plan(report, retry_count=0)
-    assert decision.retry_plan is not None
-    assert decision.retry_plan.attempt_number == 1
-    assert decision.retry_plan.retrieval_strategy == "similarity_search"
-    assert decision.retry_plan.prompt_strategy == "standard"
+    # First pass → PROMPT_REFINEMENT
+    d1 = _plan(report, retry_count=0)
+    assert d1.retry_plan is not None
+    assert d1.retry_plan.attempt_number == 1
+    assert d1.retry_plan.retrieval_strategy == "similarity_search"
+
+    # Second pass (refinement tried) → RETRY
+    variant = failure_variant(report)
+    prior = ExecutionRecord(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        timestamp="t",
+        outcome="refinement_scheduled",
+        confidence_before=0.60,
+        confidence_after=None,
+        strategy_metadata={"prompt_variant": variant},
+    )
+    d2 = _plan(report, retry_count=1, execution_history=[prior])
+    assert d2.retry_plan is not None
+    assert d2.retry_plan.attempt_number == 2
+    assert d2.retry_plan.prompt_strategy == "standard"
 
 
 def test_planner_retry_attempt_number_increments_with_retry_count() -> None:
@@ -368,7 +422,6 @@ def test_executor_timestamp_is_iso_string() -> None:
 
 
 @pytest.mark.parametrize("strategy", [
-    Strategy.PROMPT_REFINEMENT,
     Strategy.BETTER_RETRIEVAL,
     Strategy.IMAGE_PREPROCESS,
     Strategy.MODEL_ESCALATION,
@@ -378,6 +431,30 @@ def test_executor_unimplemented_strategies_raise_not_implemented(strategy: Strat
     decision = ResolutionDecision(strategy=strategy, reason="future", requires_human=False)
     with pytest.raises(NotImplementedError, match="reserved for a future phase"):
         executor.execute(decision, confidence_before=0.80)
+
+
+def test_executor_prompt_refinement_returns_record() -> None:
+    """PROMPT_REFINEMENT is implemented — executor records refinement_scheduled outcome."""
+    executor = StrategyExecutor()
+    plan = RetryPlan(
+        attempt_number=1,
+        reason="low_confidence",
+        retrieval_strategy="similarity_search",
+        prompt_strategy="refined",
+        prompt_variant="low_confidence",
+        refinement_reason="Extraction confidence below threshold.",
+    )
+    decision = ResolutionDecision(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        reason="Prompt refinement scheduled.",
+        requires_human=False,
+        retry_plan=plan,
+    )
+    records = executor.execute(decision, confidence_before=0.70)
+    assert len(records) == 1
+    assert records[0].outcome == "refinement_scheduled"
+    assert records[0].strategy_metadata["prompt_strategy"] == "refined"
+    assert records[0].strategy_metadata["prompt_variant"] == "low_confidence"
 
 
 # ---------------------------------------------------------------------------
@@ -547,14 +624,18 @@ def test_graph_route_after_truth_is_removed() -> None:
 
 
 def test_execution_history_accumulates_across_retry_passes() -> None:
-    """execution_history must append (not overwrite) across multiple passes."""
+    """execution_history must append (not overwrite) across multiple passes.
+
+    Phase 5.3: first failure → PROMPT_REFINEMENT; second (refinement tried) → RETRY;
+    third (success) → ACCEPT. Each pass appends one record.
+    """
     from pipelines.nodes.resolution_planner import resolution_planner_node
     from pipelines.nodes.strategy_executor import strategy_executor_node
 
     report_low = _make_truth_report("failed", 0.55)
     report_high = _make_truth_report("completed", 0.92)
 
-    # First pass — planner decides RETRY
+    # Pass 1 — planner decides PROMPT_REFINEMENT (first failure, no history)
     state1 = {
         "truth_report": report_low,
         "retry_count": 0,
@@ -562,28 +643,41 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
     }
     plan_result1 = resolution_planner_node(state1)  # type: ignore[arg-type]
     exec_result1 = strategy_executor_node({**state1, **plan_result1})  # type: ignore[arg-type]
-    history_after_pass1: list = exec_result1["execution_history"]
-    assert len(history_after_pass1) == 1
-    assert history_after_pass1[0].strategy == Strategy.RETRY
+    history_pass1: list = exec_result1["execution_history"]
+    assert len(history_pass1) == 1
+    assert history_pass1[0].strategy == Strategy.PROMPT_REFINEMENT
 
-    # Second pass — planner decides ACCEPT (simulating successful retry)
+    # Pass 2 — refinement tried, still failing → RETRY
     state2 = {
-        "truth_report": report_high,
+        "truth_report": report_low,
         "retry_count": 1,
-        "execution_history": history_after_pass1,  # accumulated from pass 1
+        "execution_history": history_pass1,
     }
     plan_result2 = resolution_planner_node(state2)  # type: ignore[arg-type]
     exec_result2 = strategy_executor_node({**state2, **plan_result2})  # type: ignore[arg-type]
+    history_pass2: list = exec_result2["execution_history"]
+    assert len(history_pass2) == 1
+    assert history_pass2[0].strategy == Strategy.RETRY
 
-    new_records = exec_result2["execution_history"]
-    assert len(new_records) == 1
-    assert new_records[0].strategy == Strategy.ACCEPT
+    # Pass 3 — extraction succeeds → ACCEPT
+    accumulated = history_pass1 + history_pass2  # LangGraph reducer does this
+    state3 = {
+        "truth_report": report_high,
+        "retry_count": 2,
+        "execution_history": accumulated,
+    }
+    plan_result3 = resolution_planner_node(state3)  # type: ignore[arg-type]
+    exec_result3 = strategy_executor_node({**state3, **plan_result3})  # type: ignore[arg-type]
+    history_pass3: list = exec_result3["execution_history"]
+    assert len(history_pass3) == 1
+    assert history_pass3[0].strategy == Strategy.ACCEPT
 
-    # Full accumulated history (LangGraph's reducer would concatenate these)
-    full_history = history_after_pass1 + new_records
-    assert len(full_history) == 2
-    assert full_history[0].strategy == Strategy.RETRY
-    assert full_history[1].strategy == Strategy.ACCEPT
+    # Full accumulated history has all three records
+    full = accumulated + history_pass3
+    assert len(full) == 3
+    assert full[0].strategy == Strategy.PROMPT_REFINEMENT
+    assert full[1].strategy == Strategy.RETRY
+    assert full[2].strategy == Strategy.ACCEPT
 
 
 # ---------------------------------------------------------------------------
@@ -603,27 +697,62 @@ def test_retry_decision_still_routes_to_op_a_retry() -> None:
 
 
 def test_retry_plan_always_uses_similarity_search() -> None:
-    """Regression: current retry uses similarity_search retrieval (no change from P4)."""
+    """Regression: both PROMPT_REFINEMENT and RETRY use similarity_search retrieval."""
+    from pipelines.resolution.prompt_refinement import failure_variant
+
     report = _make_truth_report("failed", 0.60)
-    decision = _plan(report, retry_count=0)
-    assert decision.retry_plan.retrieval_strategy == "similarity_search"
+    # First pass → PROMPT_REFINEMENT
+    d1 = _plan(report, retry_count=0)
+    assert d1.retry_plan.retrieval_strategy == "similarity_search"
+
+    # Second pass → RETRY (refinement tried)
+    variant = failure_variant(report)
+    prior = ExecutionRecord(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        timestamp="t",
+        outcome="refinement_scheduled",
+        confidence_before=0.60,
+        confidence_after=None,
+        strategy_metadata={"prompt_variant": variant},
+    )
+    d2 = _plan(report, retry_count=1, execution_history=[prior])
+    assert d2.retry_plan.retrieval_strategy == "similarity_search"
 
 
-def test_retry_plan_always_uses_standard_prompt() -> None:
-    """Regression: prompt_strategy must be 'standard' until prompt refinement is added."""
+def test_retry_strategy_uses_standard_prompt_after_refinement_tried() -> None:
+    """After PROMPT_REFINEMENT is tried, RETRY uses 'standard' prompt_strategy."""
+    from pipelines.resolution.prompt_refinement import failure_variant
+
     report = _make_truth_report("failed", 0.60)
-    decision = _plan(report, retry_count=0)
+    variant = failure_variant(report)
+    prior = ExecutionRecord(
+        strategy=Strategy.PROMPT_REFINEMENT,
+        timestamp="t",
+        outcome="refinement_scheduled",
+        confidence_before=0.60,
+        confidence_after=None,
+        strategy_metadata={"prompt_variant": variant},
+    )
+    decision = _plan(report, retry_count=1, execution_history=[prior])
+    assert decision.strategy == Strategy.RETRY
     assert decision.retry_plan.prompt_strategy == "standard"
 
 
+def test_prompt_refinement_uses_refined_prompt_strategy() -> None:
+    """PROMPT_REFINEMENT must set prompt_strategy='refined' so op_a_retry uses guidance."""
+    report = _make_truth_report("failed", 0.60)
+    decision = _plan(report, retry_count=0)
+    assert decision.strategy == Strategy.PROMPT_REFINEMENT
+    assert decision.retry_plan.prompt_strategy == "refined"
+
+
 def test_planner_reads_evidence_not_document_status() -> None:
-    """Phase 5.2: planner reads TruthReport evidence, NOT the pre-computed document_status.
+    """Phase 5.2/5.3: planner reads TruthReport evidence, NOT the pre-computed document_status.
 
     A TruthReport whose document_status claims 'completed' but whose raw evidence
-    (low confidence) contradicts it must be RETRIED by the evidence-driven planner.
+    (low confidence) contradicts it must trigger PROMPT_REFINEMENT (first pass)
+    or RETRY (after refinement tried) — never ACCEPT.
     """
-    # Build a contradictory report: document_status="completed" but confidence is LOW
-    from pipelines.truth_engine.models import VerificationReport as VR
     report = TruthReport(
         extraction=ExtractionResult(
             fields={}, overall_confidence=0.40, context_used=False, sample_count=1
@@ -643,9 +772,10 @@ def test_planner_reads_evidence_not_document_status() -> None:
             reason="test",
         ),
     )
-    # Evidence-driven planner: confidence=0.40 < 0.85 → RETRY (ignores document_status)
+    # Evidence-driven planner: confidence=0.40 < 0.85 → PROMPT_REFINEMENT (ignores document_status)
     decision = _plan(report, retry_count=0)
-    assert decision.strategy == Strategy.RETRY
+    assert decision.strategy in (Strategy.PROMPT_REFINEMENT, Strategy.RETRY)
+    assert decision.strategy != Strategy.ACCEPT
 
 
 def test_planner_accepts_despite_failing_document_status_when_evidence_is_green() -> None:
