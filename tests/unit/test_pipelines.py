@@ -3,7 +3,9 @@ import typing
 import unittest.mock as mock
 
 from pipelines.nodes.master import master_node
-from pipelines.router import route_after_truth
+from pipelines.resolution.models import ResolutionDecision, Strategy
+from pipelines.resolution.planner import ResolutionPlanner
+from pipelines.router import route_after_executor
 from pipelines.state import GraphState
 from pipelines.truth_engine.models import (
     EvidenceBundle,
@@ -144,7 +146,7 @@ def test_normalize_leaves_unparseable_date_unchanged() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Routing — route_after_truth
+# Routing — ResolutionPlanner + route_after_executor
 # ---------------------------------------------------------------------------
 
 
@@ -191,46 +193,79 @@ def _make_truth_report(
     )
 
 
-def test_router_routes_to_normalize_above_threshold() -> None:
-    state: GraphState = {  # type: ignore[typeddict-item]
-        "truth_report": _make_truth_report(final_confidence=0.95, allow_completion=True),
-        "retry_count": 0,
-    }
-    assert route_after_truth(state) == "normalize"
+def _plan(truth_report, retry_count: int = 0, max_retries: int = 2) -> ResolutionDecision:
+    planner = ResolutionPlanner(max_retries=max_retries)
+    return planner.plan(truth_report, retry_count, [])
 
 
-def test_router_routes_to_retry_when_confidence_low_and_retries_remain() -> None:
-    state: GraphState = {  # type: ignore[typeddict-item]
-        "truth_report": _make_truth_report(final_confidence=0.50, allow_completion=False),
-        "retry_count": 0,
-    }
-    assert route_after_truth(state) == "op_a_retry"
+def test_planner_routes_to_accept_when_completed() -> None:
+    decision = _plan(_make_truth_report(allow_completion=True), retry_count=0)
+    assert decision.strategy == Strategy.ACCEPT
 
 
-def test_router_routes_to_hitl_when_retries_exhausted() -> None:
-    state: GraphState = {  # type: ignore[typeddict-item]
-        "truth_report": _make_truth_report(final_confidence=0.50, allow_completion=False),
-        "retry_count": 2,
-    }
-    assert route_after_truth(state) == "op_b_hitl"
+def test_planner_routes_to_retry_when_confidence_low_and_retries_remain() -> None:
+    decision = _plan(_make_truth_report(allow_completion=False), retry_count=0)
+    assert decision.strategy == Strategy.RETRY
 
 
-def test_router_routes_to_hitl_when_truth_report_missing() -> None:
-    state: GraphState = {  # type: ignore[typeddict-item]
-        "truth_report": None,
-        "retry_count": 0,
-    }
-    assert route_after_truth(state) == "op_b_hitl"
+def test_planner_routes_to_hitl_when_retries_exhausted() -> None:
+    decision = _plan(_make_truth_report(allow_completion=False), retry_count=2, max_retries=2)
+    assert decision.strategy == Strategy.HITL
 
 
-def test_router_verification_failure_blocks_normalize_even_above_threshold() -> None:
-    """Failed verifier sets allow_completion=False; routing must not go to normalize."""
+def test_planner_routes_to_hitl_when_truth_report_missing() -> None:
+    decision = _plan(None, retry_count=0)
+    assert decision.strategy == Strategy.HITL
+
+
+def test_planner_verification_failure_blocks_accept() -> None:
+    """verification_failed status → document is not ACCEPTED regardless of confidence."""
     report = _make_truth_report(final_confidence=0.95, allow_completion=False, verifier_failed=True)
+    decision = _plan(report, retry_count=0)
+    assert decision.strategy != Strategy.ACCEPT
+
+
+def test_route_after_executor_accept_normalizes() -> None:
     state: GraphState = {  # type: ignore[typeddict-item]
-        "truth_report": report,
-        "retry_count": 0,
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.ACCEPT, reason="ok", requires_human=False
+        ),
     }
-    assert route_after_truth(state) != "normalize"
+    assert route_after_executor(state) == "normalize"
+
+
+def test_route_after_executor_retry_goes_to_op_a_retry() -> None:
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.RETRY, reason="low_confidence", requires_human=False
+        ),
+    }
+    assert route_after_executor(state) == "op_a_retry"
+
+
+def test_route_after_executor_hitl_goes_to_op_b_hitl() -> None:
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.HITL, reason="retries_exhausted", requires_human=True
+        ),
+    }
+    assert route_after_executor(state) == "op_b_hitl"
+
+
+def test_route_after_executor_reject_goes_to_persist() -> None:
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.REJECT, reason="rejected", requires_human=False
+        ),
+    }
+    assert route_after_executor(state) == "persist"
+
+
+def test_route_after_executor_none_decision_goes_to_hitl() -> None:
+    state: GraphState = {  # type: ignore[typeddict-item]
+        "resolution_decision": None,
+    }
+    assert route_after_executor(state) == "op_b_hitl"
 
 
 def test_route_after_hitl_rejection_goes_to_persist() -> None:
@@ -457,6 +492,34 @@ def test_graph_has_truth_engine_node() -> None:
     node_names = set(g.get_graph().nodes.keys())
     assert "truth_engine" in node_names
     assert "validate" not in node_names
+
+
+def test_graph_has_resolution_engine_nodes() -> None:
+    """Phase 5.1: resolution_planner and strategy_executor must be registered."""
+    from langgraph.checkpoint.memory import MemorySaver
+    from pipelines.graph import build_graph
+
+    with mock.patch("pipelines.graph.get_checkpointer", return_value=MemorySaver()):
+        g = build_graph()
+
+    node_names = set(g.get_graph().nodes.keys())
+    assert "resolution_planner" in node_names
+    assert "strategy_executor" in node_names
+
+
+def test_graph_truth_engine_goes_to_resolution_planner() -> None:
+    """truth_engine output must feed resolution_planner, not a static router."""
+    from langgraph.checkpoint.memory import MemorySaver
+    from pipelines.graph import build_graph
+
+    with mock.patch("pipelines.graph.get_checkpointer", return_value=MemorySaver()):
+        g = build_graph()
+
+    edges = g.get_graph().edges
+    next_from_truth = {e[1] for e in edges if e[0] == "truth_engine"}
+    assert "resolution_planner" in next_from_truth
+    assert "normalize" not in next_from_truth
+    assert "op_a_retry" not in next_from_truth
 
 
 def test_graph_op_a_retry_goes_to_truth_engine() -> None:

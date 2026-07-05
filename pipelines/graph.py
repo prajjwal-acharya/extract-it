@@ -13,10 +13,12 @@ from pipelines.nodes.master import master_node
 from pipelines.nodes.normalize import normalize_node
 from pipelines.nodes.op_a_retry import op_a_retry_node
 from pipelines.nodes.op_b_hitl import op_b_hitl_node
+from pipelines.nodes.resolution_planner import resolution_planner_node
+from pipelines.nodes.strategy_executor import strategy_executor_node
 from pipelines.nodes.truth_engine import truth_engine_node
 from pipelines.nodes.unknown_handler import unknown_handler_node
 from pipelines.registry import RoutingAction
-from pipelines.router import route_after_hitl, route_after_truth
+from pipelines.router import route_after_executor, route_after_hitl
 from pipelines.state import GraphState
 
 log = logging.getLogger(__name__)
@@ -27,6 +29,8 @@ _PHASE_MAP = {
     "unknown_handler": "routing_failed",
     "extract": "extracting",
     "truth_engine": "evaluating",
+    "resolution_planner": "planning",
+    "strategy_executor": "executing",
     "op_a_retry": "retrying",
     "op_b_hitl": "awaiting_review",
     "normalize": "normalizing",
@@ -72,7 +76,12 @@ def build_graph() -> CompiledStateGraph:
         master → classify →[route]→ extract (PROCEED)
                                   → unknown_handler (UNKNOWN | FAILURE)
         unknown_handler → persist → END
-        extract → truth_engine →[route_after_truth]→ normalize | op_a_retry | op_b_hitl
+
+        extract → truth_engine → resolution_planner → strategy_executor
+        strategy_executor →[route_after_executor]→ normalize (ACCEPT)
+                                                  → op_a_retry (RETRY)
+                                                  → op_b_hitl  (HITL)
+                                                  → persist     (REJECT)
         op_a_retry → truth_engine  (retries always regenerate evidence)
         op_b_hitl →[route_after_hitl]→ normalize | persist
         normalize → persist → END
@@ -85,6 +94,8 @@ def build_graph() -> CompiledStateGraph:
         ("unknown_handler", unknown_handler_node),
         ("extract", extract_node),
         ("truth_engine", truth_engine_node),
+        ("resolution_planner", resolution_planner_node),
+        ("strategy_executor", strategy_executor_node),
         ("normalize", normalize_node),
         ("op_a_retry", op_a_retry_node),
         ("op_b_hitl", op_b_hitl_node),
@@ -101,13 +112,24 @@ def build_graph() -> CompiledStateGraph:
     )
     builder.add_edge("unknown_handler", "persist")
 
+    # Resolution Engine pipeline (replaces static route_after_truth)
     builder.add_edge("extract", "truth_engine")
+    builder.add_edge("truth_engine", "resolution_planner")
+    builder.add_edge("resolution_planner", "strategy_executor")
     builder.add_conditional_edges(
-        "truth_engine",
-        route_after_truth,
-        {"normalize": "normalize", "op_a_retry": "op_a_retry", "op_b_hitl": "op_b_hitl"},
+        "strategy_executor",
+        route_after_executor,
+        {
+            "normalize": "normalize",
+            "op_a_retry": "op_a_retry",
+            "op_b_hitl": "op_b_hitl",
+            "persist": "persist",
+        },
     )
+
+    # Retry loop: op_a_retry regenerates evidence via truth_engine → full resolution cycle
     builder.add_edge("op_a_retry", "truth_engine")
+
     builder.add_conditional_edges(
         "op_b_hitl",
         route_after_hitl,

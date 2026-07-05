@@ -3,6 +3,7 @@ from typing import Annotated
 from typing_extensions import TypedDict
 import operator
 
+from pipelines.resolution.models import ExecutionRecord, ResolutionDecision
 from pipelines.routing_engine import ClassificationContext
 from pipelines.truth_engine.models import ExtractionResult, TruthReport
 
@@ -36,6 +37,10 @@ class GraphState(TypedDict):
 
     # ── Truth Engine outputs (Phase 4) ──────────────────────────────────────
     truth_report: TruthReport | None
+
+    # ── Resolution Engine outputs (Phase 5) ──────────────────────────────────
+    resolution_decision: ResolutionDecision | None
+    execution_history: Annotated[list[ExecutionRecord], operator.add]
 
     # ── Validate node outputs (kept for op_b_hitl display compat) ──────────
     # validation_issues no longer populated by validate_node (removed in P4.2);

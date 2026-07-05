@@ -1,26 +1,29 @@
-from config.settings import settings
+from pipelines.resolution.models import Strategy
 from pipelines.state import GraphState
 
 
-def route_after_truth(state: GraphState) -> str:
-    """Route after truth_engine_node by reading TruthReport.persistence.document_status.
+def route_after_executor(state: GraphState) -> str:
+    """Route after strategy_executor_node based on ResolutionDecision.strategy.
 
-    Graph nodes must not inspect confidence values or verification reports.
-    The PersistenceDecision already encodes the business logic.
+    Graph nodes must not inspect TruthReport internals. All downstream routing
+    is owned by ResolutionPlanner; this function only dispatches on the result.
 
-    NORMALIZE  — document_status is "completed" (confidence + verifiers passed)
-    OP_A_RETRY — not completed, retries remain
-    OP_B_HITL  — not completed, retries exhausted
+    ACCEPT   → normalize
+    RETRY    → op_a_retry  (existing retry implementation, unchanged from Phase 4)
+    HITL     → op_b_hitl
+    REJECT   → persist     (final, skip normalization)
+    future / None → op_b_hitl  (safe fallback for unimplemented strategies)
     """
-    truth_report = state.get("truth_report")
-    if truth_report is None:
+    decision = state.get("resolution_decision")
+    if decision is None:
         return "op_b_hitl"
-
-    if truth_report.persistence.document_status == "completed":
+    if decision.strategy == Strategy.ACCEPT:
         return "normalize"
-    if state.get("retry_count", 0) < settings.MAX_RETRIES:
+    if decision.strategy == Strategy.RETRY:
         return "op_a_retry"
-    return "op_b_hitl"
+    if decision.strategy == Strategy.REJECT:
+        return "persist"
+    return "op_b_hitl"   # HITL and all unimplemented future strategies
 
 
 def route_after_hitl(state: GraphState) -> str:
