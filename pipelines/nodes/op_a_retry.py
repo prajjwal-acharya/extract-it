@@ -7,7 +7,6 @@ from adapters.factory import get_object_store
 from agents.extract_agent import extract
 from agents.llm_client import embed
 from agents.schema_diff_agent import apply_diff, diff_schema, discover_fields
-from agents.validate_agent import validate
 from db.models import RetrievalLog, SchemaVersion
 from db.session import session_scope
 from db.vector_store import similarity_search
@@ -81,13 +80,11 @@ def op_a_retry_node(state: GraphState) -> dict:
             )
 
     result = extract(raw_bytes, mime_type, doc_type, context=context)
-    validate_result = validate(doc_type, result.fields)
 
     return {
         "extracted_fields": result.fields,
         "extract_confidence": result.overall_confidence,
-        "validation_issues": validate_result.data.get("issues", []),
-        "validate_confidence": validate_result.confidence,
+        "extraction_result": result,
         "retry_count": state["retry_count"] + 1,
         "schema_version": schema_version,
     }

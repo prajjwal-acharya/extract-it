@@ -23,36 +23,40 @@ class VerifierSpec:
 
 
 # ---------------------------------------------------------------------------
-# Field extractors for registered verifiers
+# Passport extractors
 # ---------------------------------------------------------------------------
 
 
 def _extract_mrz_args(fields: dict) -> dict | None:
-    """Extract MRZ document-number + check-digit from mrz_line2.
-
-    Passport MRZ line 2 layout (ICAO 9303):
-        chars 0-8  → document number (9 chars, may include '<' filler)
-        char  9    → check digit for document number
-    Returns None if mrz_line2 is absent or too short to parse.
-    """
+    """Chars 0-8 of mrz_line2 → document number; char 9 → check digit."""
     mrz_line2 = fields.get("mrz_line2")
     if not isinstance(mrz_line2, str) or len(mrz_line2) < 10:
         return None
-    mrz_string = mrz_line2[:9]
     try:
-        check_digit = int(mrz_line2[9])
+        return {"mrz_string": mrz_line2[:9], "check_digit": int(mrz_line2[9])}
     except (ValueError, IndexError):
         return None
-    return {"mrz_string": mrz_string, "check_digit": check_digit}
+
+
+def _extract_passport_dates(fields: dict) -> dict | None:
+    issue = fields.get("date_of_issue")
+    expiry = fields.get("date_of_expiry")
+    if not issue or not expiry:
+        return None
+    kwargs: dict = {"issue_date": issue, "expiry_date": expiry}
+    dob = fields.get("date_of_birth")
+    if dob:
+        kwargs["birth_date"] = dob
+    return kwargs
+
+
+# ---------------------------------------------------------------------------
+# Bank Statement extractors
+# ---------------------------------------------------------------------------
 
 
 def _extract_balance_args(fields: dict) -> dict | None:
-    """Extract opening/closing balances and transaction amounts.
-
-    Tries common field-name variants produced by open extraction.
-    Transactions may be plain floats or dicts with an 'amount' key.
-    Returns None when opening or closing is absent.
-    """
+    """Resolve opening/closing aliases; handle dict or float transactions."""
     opening = (
         fields.get("opening_balance")
         if fields.get("opening_balance") is not None
@@ -65,21 +69,111 @@ def _extract_balance_args(fields: dict) -> dict | None:
     )
     if opening is None or closing is None:
         return None
-    raw_transactions = fields.get("transactions") or []
+    raw = fields.get("transactions") or []
     try:
-        amounts: list[float] = []
-        for t in raw_transactions:
-            if isinstance(t, dict):
-                amounts.append(float(t.get("amount", 0.0)))
-            else:
-                amounts.append(float(t))
-        return {
-            "opening": float(opening),
-            "closing": float(closing),
-            "transactions": amounts,
-        }
+        amounts: list[float] = [
+            float(t.get("amount", 0.0)) if isinstance(t, dict) else float(t) for t in raw
+        ]
+        return {"opening": float(opening), "closing": float(closing), "transactions": amounts}
     except (TypeError, ValueError):
         return None
+
+
+def _extract_period_args(fields: dict) -> dict | None:
+    start = fields.get("statement_start_date") or fields.get("period_start")
+    end = fields.get("statement_end_date") or fields.get("period_end")
+    if not start or not end:
+        return None
+    return {"start_date": start, "end_date": end}
+
+
+# ---------------------------------------------------------------------------
+# GST Invoice extractors
+# ---------------------------------------------------------------------------
+
+
+def _extract_gstin_args(fields: dict) -> dict | None:
+    gstin = fields.get("gstin") or fields.get("seller_gstin")
+    if not gstin:
+        return None
+    return {"gstin": gstin}
+
+
+def _extract_invoice_total_args(fields: dict) -> dict | None:
+    subtotal = fields.get("subtotal") or fields.get("taxable_value")
+    tax = fields.get("tax_amount") or fields.get("total_tax")
+    total = fields.get("invoice_total") or fields.get("total_amount") or fields.get("grand_total")
+    if subtotal is None or tax is None or total is None:
+        return None
+    try:
+        return {"subtotal": float(subtotal), "tax_amount": float(tax), "total": float(total)}
+    except (TypeError, ValueError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Salary Slip extractors
+# ---------------------------------------------------------------------------
+
+
+def _extract_gross_args(fields: dict) -> dict | None:
+    basic = fields.get("basic_salary") or fields.get("basic")
+    gross = fields.get("gross_salary") or fields.get("gross")
+    if basic is None or gross is None:
+        return None
+    raw = fields.get("allowances") or []
+    try:
+        amounts: list[float] = [
+            float(a.get("amount", 0.0)) if isinstance(a, dict) else float(a) for a in raw
+        ]
+        return {"basic": float(basic), "allowances": amounts, "gross": float(gross)}
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_pan_from_salary(fields: dict) -> dict | None:
+    pan = fields.get("pan") or fields.get("employee_pan")
+    if not pan:
+        return None
+    return {"pan": pan}
+
+
+# ---------------------------------------------------------------------------
+# ITR extractors
+# ---------------------------------------------------------------------------
+
+
+def _extract_pan_from_itr(fields: dict) -> dict | None:
+    pan = fields.get("pan") or fields.get("pan_number")
+    if not pan:
+        return None
+    return {"pan": pan}
+
+
+def _extract_ay_fy_args(fields: dict) -> dict | None:
+    ay = fields.get("assessment_year") or fields.get("ay")
+    fy = fields.get("financial_year") or fields.get("fy")
+    if not ay or not fy:
+        return None
+    return {"assessment_year": ay, "financial_year": fy}
+
+
+# ---------------------------------------------------------------------------
+# Property Deed extractors
+# ---------------------------------------------------------------------------
+
+
+def _extract_deed_dates(fields: dict) -> dict | None:
+    execution = fields.get("execution_date") or fields.get("deed_date")
+    registration = fields.get("registration_date")
+    if not execution or not registration:
+        return None
+    return {"execution_date": execution, "registration_date": registration}
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
 
 
 class VerifierRegistry:
@@ -106,7 +200,18 @@ class VerifierRegistry:
         return list(self._registry.keys())
 
 
-from agents.verifiers import balance_arithmetic, mrz_checksum
+from agents.verifiers import (
+    ay_fy_consistency,
+    balance_arithmetic,
+    deed_date_consistency,
+    gross_consistency,
+    gstin_checksum,
+    invoice_total_consistency,
+    mrz_checksum,
+    pan_validation,
+    passport_date_consistency,
+    statement_period_ordering,
+)
 
 verifier_registry = VerifierRegistry()
 
@@ -115,10 +220,17 @@ verifier_registry.register(
     VerifierSpec(
         name="mrz_checksum",
         fn=mrz_checksum,
-        description="Verify MRZ field check digits per ICAO 9303",
+        description="Verify MRZ document-number check digit per ICAO 9303",
         extractor=_extract_mrz_args,
     ),
+    VerifierSpec(
+        name="passport_date_consistency",
+        fn=passport_date_consistency,
+        description="Verify birth_date < issue_date < expiry_date",
+        extractor=_extract_passport_dates,
+    ),
 )
+
 verifier_registry.register(
     "bank_statement",
     VerifierSpec(
@@ -127,8 +239,68 @@ verifier_registry.register(
         description="Verify opening + sum(transactions) ≈ closing balance (±0.01)",
         extractor=_extract_balance_args,
     ),
+    VerifierSpec(
+        name="statement_period_ordering",
+        fn=statement_period_ordering,
+        description="Verify statement start_date < end_date",
+        extractor=_extract_period_args,
+    ),
 )
-# Placeholders — verifiers will be registered here as they are implemented:
-# verifier_registry.register("gst_invoice",   VerifierSpec("gstin_checksum", ...))
-# verifier_registry.register("salary_slip",   VerifierSpec(...))
-# verifier_registry.register("property_deed", VerifierSpec(...))
+
+verifier_registry.register(
+    "gst_invoice",
+    VerifierSpec(
+        name="gstin_checksum",
+        fn=gstin_checksum,
+        description="Validate GSTIN format and mod-36 check digit",
+        extractor=_extract_gstin_args,
+    ),
+    VerifierSpec(
+        name="invoice_total_consistency",
+        fn=invoice_total_consistency,
+        description="Verify subtotal + tax_amount ≈ invoice total (±0.01)",
+        extractor=_extract_invoice_total_args,
+    ),
+)
+
+verifier_registry.register(
+    "salary_slip",
+    VerifierSpec(
+        name="gross_consistency",
+        fn=gross_consistency,
+        description="Verify basic + sum(allowances) ≈ gross salary (±0.01)",
+        extractor=_extract_gross_args,
+    ),
+    VerifierSpec(
+        name="pan_validation",
+        fn=pan_validation,
+        description="Validate employee PAN format",
+        extractor=_extract_pan_from_salary,
+    ),
+)
+
+verifier_registry.register(
+    "itr",
+    VerifierSpec(
+        name="pan_validation",
+        fn=pan_validation,
+        description="Validate PAN number format",
+        extractor=_extract_pan_from_itr,
+    ),
+    VerifierSpec(
+        name="ay_fy_consistency",
+        fn=ay_fy_consistency,
+        description="Verify Assessment Year = Financial Year + 1",
+        extractor=_extract_ay_fy_args,
+    ),
+)
+
+verifier_registry.register(
+    "property_deed",
+    VerifierSpec(
+        name="deed_date_consistency",
+        fn=deed_date_consistency,
+        description="Verify execution_date ≤ registration_date",
+        extractor=_extract_deed_dates,
+    ),
+)

@@ -55,8 +55,7 @@ class FieldValidationReport:
 class VerificationReport:
     """Outcome of a single deterministic verifier.
 
-    passed=None means the verifier was not attempted (doc type has no verifier,
-    or verification was skipped).
+    passed=None means the verifier was not attempted (required fields absent).
     """
 
     verifier_name: str
@@ -65,11 +64,58 @@ class VerificationReport:
     details: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class EvidenceBundle:
+    """All confidence signals bundled for ConfidenceFusionPolicy.fuse().
+
+    Passing a single bundle rather than separate primitives keeps the fuse()
+    signature stable as new signals are added in later phases.
+    """
+
+    classify_confidence: float
+    extraction_confidence: float
+    coverage_score: float
+    verification_reports: list[VerificationReport]
+
+
+@dataclass
+class PersistencePolicy:
+    """Flags that downstream persistence (P6) must obey.
+
+    Computed by the Truth Engine after confidence fusion. Business logic lives
+    here; the persistence layer must not re-implement it.
+    """
+
+    allow_completion: bool
+    allow_embedding: bool
+    allow_learning: bool
+
+    @classmethod
+    def from_truth(
+        cls,
+        verification_reports: list[VerificationReport],
+        final_confidence: float,
+        threshold: float = 0.85,
+    ) -> "PersistencePolicy":
+        """Derive persistence policy from verification results and confidence.
+
+        Rule: any deterministic failure (passed=False) blocks all persistence.
+        Otherwise, allow_completion requires final_confidence >= threshold;
+        allow_embedding and allow_learning follow allow_completion.
+        """
+        hard_fail = any(r.passed is False for r in verification_reports)
+        if hard_fail:
+            return cls(allow_completion=False, allow_embedding=False, allow_learning=False)
+        allow = final_confidence >= threshold
+        return cls(allow_completion=allow, allow_embedding=allow, allow_learning=allow)
+
+
 @dataclass
 class TruthReport:
     """Phase 4 evidence object. Explains why final_confidence is what it is.
 
     TruthReport is never a routing decision — it is evidence that informs one.
+    After Phase 4.2, routing and persistence decisions derive from this object.
     """
 
     extraction: ExtractionResult
@@ -77,3 +123,34 @@ class TruthReport:
     verification_reports: list[VerificationReport]
     final_confidence: float
     decision_reason: str
+    persistence: PersistencePolicy = field(
+        default_factory=lambda: PersistencePolicy(
+            allow_completion=True, allow_embedding=True, allow_learning=True
+        )
+    )
+
+
+def status_from_truth_report(
+    truth_report: TruthReport | None,
+    *,
+    error: str | None = None,
+    hitl_required: bool = False,
+    hitl_approved: bool | None = None,
+) -> str:
+    """Derive the document's final status string from TruthReport evidence.
+
+    All status computation is centralised here — no node should compute status
+    independently from scattered flags.
+    """
+    if error:
+        return "failed"
+    if hitl_required and not hitl_approved:
+        return "rejected"
+    if truth_report is None:
+        return "failed"
+    hard_fail = any(r.passed is False for r in truth_report.verification_reports)
+    if hard_fail:
+        return "verification_failed"
+    if truth_report.persistence.allow_completion:
+        return "completed"
+    return "failed"

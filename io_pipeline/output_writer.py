@@ -2,23 +2,27 @@ import json
 
 from adapters.factory import get_object_store
 from agents.llm_client import embed
-from db.models import ConfidenceLog, Document
+from db.models import ConfidenceLog, Document, TruthAuditLog
 from db.session import get_session
 from db.vector_store import upsert_embedding
 from pipelines.state import GraphState
-
-
-def _compute_status(state: GraphState) -> str:
-    if state.get("error"):
-        return "failed"
-    if state.get("hitl_required") and not state.get("hitl_approved"):
-        return "rejected"
-    return "completed"
+from pipelines.truth_engine.models import TruthReport, status_from_truth_report
 
 
 def write_output(state: GraphState) -> None:
-    """Persist pipeline results to Postgres and the object store."""
-    status = _compute_status(state)
+    """Persist pipeline results to Postgres and the object store.
+
+    Status and persistence decisions derive from TruthReport — no logic is
+    reimplemented here. The writer is a pure side-effect layer.
+    """
+    truth_report: TruthReport | None = state.get("truth_report")
+
+    status = status_from_truth_report(
+        truth_report,
+        error=state.get("error"),
+        hitl_required=bool(state.get("hitl_required")),
+        hitl_approved=state.get("hitl_approved"),
+    )
 
     session = get_session()
     try:
@@ -26,16 +30,16 @@ def write_output(state: GraphState) -> None:
         if doc is None:
             raise ValueError(f"Document {state['document_id']} not found")
         doc.status = status
-        doc.current_phase = status  # completed / failed / rejected overrides "finalizing" stamp
+        doc.current_phase = status
         if state.get("doc_type"):
             doc.doc_type = state["doc_type"]
         doc.universal_schema = state.get("universal_schema") or {}
         doc.extracted_fields = state.get("extracted_fields") or {}
 
+        # ConfidenceLog — classify and extract are always logged
         for agent, confidence in (
             ("classify", state.get("classify_confidence")),
             ("extract", state.get("extract_confidence")),
-            ("validate", state.get("validate_confidence")),
         ):
             if confidence is not None:
                 session.add(
@@ -43,11 +47,20 @@ def write_output(state: GraphState) -> None:
                         document_id=state["document_id"],
                         agent=agent,
                         score=confidence,
-                        reason=state.get("error")
-                        or "; ".join(state.get("validation_issues") or [])
-                        or None,
+                        reason=state.get("error") or None,
                     )
                 )
+
+        # Truth Engine confidence log
+        if truth_report is not None:
+            session.add(
+                ConfidenceLog(
+                    document_id=state["document_id"],
+                    agent="truth_engine",
+                    score=truth_report.final_confidence,
+                    reason=truth_report.decision_reason,
+                )
+            )
 
         if state.get("schema_version") is not None:
             session.add(
@@ -59,14 +72,29 @@ def write_output(state: GraphState) -> None:
                 )
             )
 
-        if state.get("verification_passed") is not None:
-            passed = bool(state["verification_passed"])
+        # TruthAuditLog — persists full evidence bundle for audit and ML
+        if truth_report is not None:
             session.add(
-                ConfidenceLog(
+                TruthAuditLog(
                     document_id=state["document_id"],
-                    agent="verify",
-                    score=1.0 if passed else 0.0,
-                    reason=None if passed else "deterministic verifier check failed",
+                    doc_type=state.get("doc_type"),
+                    final_confidence=truth_report.final_confidence,
+                    decision_reason=truth_report.decision_reason,
+                    coverage_score=truth_report.field_validation.coverage_score,
+                    required_fields_missing=truth_report.field_validation.required_fields_missing,
+                    additional_fields=truth_report.field_validation.additional_fields,
+                    verification_reports=[
+                        {
+                            "verifier_name": r.verifier_name,
+                            "passed": r.passed,
+                            "confidence": r.confidence,
+                            "details": r.details,
+                        }
+                        for r in truth_report.verification_reports
+                    ],
+                    allow_completion=truth_report.persistence.allow_completion,
+                    allow_embedding=truth_report.persistence.allow_embedding,
+                    allow_learning=truth_report.persistence.allow_learning,
                 )
             )
 
@@ -76,7 +104,9 @@ def write_output(state: GraphState) -> None:
         payload = json.dumps(state.get("universal_schema") or {}).encode()
         store.put(f"output/{state['document_id']}.json", payload, content_type="application/json")
 
-        if status == "completed" and state.get("extracted_fields"):
+        # Embedding gated on TruthReport.persistence.allow_embedding
+        allow_embed = truth_report.persistence.allow_embedding if truth_report else False
+        if allow_embed and state.get("extracted_fields"):
             chunk_text = json.dumps(state["extracted_fields"])
             embedding = embed(chunk_text)
             upsert_embedding(session, state["document_id"], 0, chunk_text, embedding)

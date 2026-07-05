@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 
+from config.settings import settings
 from pipelines.state import GraphState
 from pipelines.truth_engine.confidence import ConfidenceFusionPolicy
 from pipelines.truth_engine.models import (
+    EvidenceBundle,
     ExtractionResult,
     FieldValidationReport,
+    PersistencePolicy,
     TruthReport,
     VerificationReport,
 )
@@ -20,15 +23,15 @@ _policy = ConfidenceFusionPolicy()
 def truth_engine_node(state: GraphState) -> dict:
     """Transform ExtractionResult into a TruthReport.
 
-    Runs in sequence: field validation → verifier execution → confidence
-    fusion → TruthReport assembly. Produces only evidence — no routing
-    decisions are made here.
+    Sequence: field validation → verifier execution → evidence bundle →
+    confidence fusion → persistence policy → TruthReport assembly.
+    Produces evidence only — no routing decisions are made here.
     """
     doc_type = state.get("doc_type") or ""
     classify_confidence = state.get("classify_confidence") or 0.0
 
     # Prefer the typed ExtractionResult stored by extract_node; reconstruct
-    # from flat state fields when unavailable (e.g. after op_a_retry in Phase 4.1).
+    # from flat state fields when unavailable (e.g. after op_a_retry).
     extraction: ExtractionResult = state.get("extraction_result") or ExtractionResult(
         fields=state.get("extracted_fields") or {},
         overall_confidence=state.get("extract_confidence") or 0.0,
@@ -85,13 +88,14 @@ def truth_engine_node(state: GraphState) -> dict:
         )
         verification_reports.append(report)
 
-    # 3. Confidence fusion — deterministic weighted combination of all signals
-    final_confidence, decision_reason = _policy.fuse(
+    # 3. Confidence fusion via EvidenceBundle
+    bundle = EvidenceBundle(
         classify_confidence=classify_confidence,
         extraction_confidence=extraction.overall_confidence,
         coverage_score=field_validation.coverage_score,
         verification_reports=verification_reports,
     )
+    final_confidence, decision_reason = _policy.fuse(bundle)
     log.info(
         "event=ConfidenceFusion doc_type=%s final=%.4f reason=%s",
         doc_type,
@@ -99,21 +103,30 @@ def truth_engine_node(state: GraphState) -> dict:
         decision_reason,
     )
 
-    # 4. Assemble TruthReport — evidence only, no routing
+    # 4. Persistence policy — derived from verification results and confidence
+    persistence = PersistencePolicy.from_truth(
+        verification_reports=verification_reports,
+        final_confidence=final_confidence,
+        threshold=settings.CONFIDENCE_THRESHOLD,
+    )
+
+    # 5. Assemble TruthReport — evidence only, no routing
     truth_report = TruthReport(
         extraction=extraction,
         field_validation=field_validation,
         verification_reports=verification_reports,
         final_confidence=final_confidence,
         decision_reason=decision_reason,
+        persistence=persistence,
     )
     log.info(
         "event=TruthReportCreated doc_type=%s final_confidence=%.4f "
-        "verifiers_run=%d verifiers_passed=%d",
+        "verifiers_run=%d verifiers_passed=%d allow_completion=%s",
         doc_type,
         final_confidence,
         len(verification_reports),
         sum(1 for r in verification_reports if r.passed is True),
+        persistence.allow_completion,
     )
 
     return {"truth_report": truth_report}

@@ -21,6 +21,7 @@ DOCUMENT_PHASES = (
     "ingested",
     "classifying",
     "extracting",
+    "evaluating",
     "validating",
     "retrying",
     "awaiting_review",
@@ -28,6 +29,7 @@ DOCUMENT_PHASES = (
     "finalizing",
     "completed",
     "rejected",
+    "verification_failed",
     "failed",
 )
 
@@ -144,3 +146,35 @@ class RetrievalLog(Base):
     retrieved_document: Mapped["Document"] = relationship(
         foreign_keys=[retrieved_document_id], back_populates="retrieval_logs_as_retrieved"
     )
+
+
+class TruthAuditLog(Base):
+    """Persisted evidence from the Truth Engine for each document.
+
+    One row per pipeline run (most recent TruthReport wins when updated).
+    Add migration: CREATE TABLE truth_audit_logs (...) before enabling.
+    """
+
+    __tablename__ = "truth_audit_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False, index=True)
+    doc_type: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    final_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    decision_reason: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # FieldValidationReport snapshot
+    coverage_score: Mapped[float] = mapped_column(Float, nullable=False)
+    required_fields_missing: Mapped[list] = mapped_column(JSON, nullable=False)
+    additional_fields: Mapped[list] = mapped_column(JSON, nullable=False)
+
+    # VerificationReport list — serialised as [{"verifier_name": ..., "passed": ..., ...}]
+    verification_reports: Mapped[list] = mapped_column(JSON, nullable=False)
+
+    # Persistence policy flags
+    allow_completion: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    allow_embedding: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    allow_learning: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

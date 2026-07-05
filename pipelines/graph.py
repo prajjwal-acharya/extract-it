@@ -15,9 +15,8 @@ from pipelines.nodes.op_a_retry import op_a_retry_node
 from pipelines.nodes.op_b_hitl import op_b_hitl_node
 from pipelines.nodes.truth_engine import truth_engine_node
 from pipelines.nodes.unknown_handler import unknown_handler_node
-from pipelines.nodes.validate import validate_node
 from pipelines.registry import RoutingAction
-from pipelines.router import route_after_hitl, route_after_validate
+from pipelines.router import route_after_hitl, route_after_truth
 from pipelines.state import GraphState
 
 log = logging.getLogger(__name__)
@@ -28,7 +27,6 @@ _PHASE_MAP = {
     "unknown_handler": "routing_failed",
     "extract": "extracting",
     "truth_engine": "evaluating",
-    "validate": "validating",
     "op_a_retry": "retrying",
     "op_b_hitl": "awaiting_review",
     "normalize": "normalizing",
@@ -56,10 +54,10 @@ def _persist_node(state: GraphState) -> dict:
 
 
 def _route_after_classify(state: GraphState) -> str:
-    """Route based on RoutingPlan.action — the graph never inspects AgentResult directly.
+    """Route based on RoutingPlan.action.
 
     PROCEED → extract
-    UNKNOWN | FAILURE → unknown_handler (both terminate without extraction)
+    UNKNOWN | FAILURE → unknown_handler
     """
     ctx = state.get("classification_context")
     if ctx is not None and ctx.routing_plan.action == RoutingAction.PROCEED:
@@ -74,9 +72,9 @@ def build_graph() -> CompiledStateGraph:
         master → classify →[route]→ extract (PROCEED)
                                   → unknown_handler (UNKNOWN | FAILURE)
         unknown_handler → persist → END
-        extract → truth_engine → validate →[route]→ normalize | op_a_retry | op_b_hitl
-        op_a_retry → validate
-        op_b_hitl →[route]→ normalize | persist
+        extract → truth_engine →[route_after_truth]→ normalize | op_a_retry | op_b_hitl
+        op_a_retry → truth_engine  (retries always regenerate evidence)
+        op_b_hitl →[route_after_hitl]→ normalize | persist
         normalize → persist → END
     """
     builder = StateGraph(GraphState)
@@ -87,7 +85,6 @@ def build_graph() -> CompiledStateGraph:
         ("unknown_handler", unknown_handler_node),
         ("extract", extract_node),
         ("truth_engine", truth_engine_node),
-        ("validate", validate_node),
         ("normalize", normalize_node),
         ("op_a_retry", op_a_retry_node),
         ("op_b_hitl", op_b_hitl_node),
@@ -105,13 +102,12 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("unknown_handler", "persist")
 
     builder.add_edge("extract", "truth_engine")
-    builder.add_edge("truth_engine", "validate")
     builder.add_conditional_edges(
-        "validate",
-        route_after_validate,
+        "truth_engine",
+        route_after_truth,
         {"normalize": "normalize", "op_a_retry": "op_a_retry", "op_b_hitl": "op_b_hitl"},
     )
-    builder.add_edge("op_a_retry", "validate")
+    builder.add_edge("op_a_retry", "truth_engine")
     builder.add_conditional_edges(
         "op_b_hitl",
         route_after_hitl,

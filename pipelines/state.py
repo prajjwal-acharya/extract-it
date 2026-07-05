@@ -26,30 +26,21 @@ class GraphState(TypedDict):
     # ── Classify node outputs ───────────────────────────────────────────────
     doc_type: str | None
     classify_confidence: float
-    # Full routing audit envelope; graph routing depends only on this.
     classification_context: ClassificationContext | None
-    # Routing policy version that produced the RoutingPlan (audit trail).
     routing_version: str | None
 
     # ── Extract node outputs ────────────────────────────────────────────────
-    # extracted_fields is overwritten by op_a_retry on each retry pass, so
-    # it needs a reducer to avoid LangGraph update-conflict errors.
     extracted_fields: Annotated[dict, _keep_last]
     extract_confidence: float
-    # Full typed extraction result — preserves context_used, sample_count,
-    # retrieval_metadata that scatter otherwise across state fields.
     extraction_result: ExtractionResult | None
 
     # ── Truth Engine outputs (Phase 4) ──────────────────────────────────────
-    # Evidence object produced once after first extraction.
-    # Not yet used for routing (Phase 4.2 will wire that).
     truth_report: TruthReport | None
 
-    # ── Validate node outputs ───────────────────────────────────────────────
-    # validation_issues is accumulated across retry passes; operator.add
-    # appends each pass's issues list rather than overwriting prior ones.
+    # ── Validate node outputs (kept for op_b_hitl display compat) ──────────
+    # validation_issues no longer populated by validate_node (removed in P4.2);
+    # retained so op_b_hitl's interrupt payload compiles without change.
     validation_issues: Annotated[list[str], operator.add]
-    validate_confidence: float
 
     # ── Normalize / universal schema output ────────────────────────────────
     universal_schema: dict
@@ -61,9 +52,6 @@ class GraphState(TypedDict):
 
     # ── Verifier tool-call budget tracking (accumulated across nodes) ───────
     tool_call_count: Annotated[int, operator.add]
-
-    # ── Deterministic verifier outcome (None = not attempted) ───────────────
-    verification_passed: bool | None
 
     # ── Active schema version used for this extraction (audit trail) ────────
     schema_version: str | None

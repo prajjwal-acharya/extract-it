@@ -10,6 +10,12 @@ from db.models import ConfidenceLog, Document
 from io_pipeline.ingestion import ingest_file
 from io_pipeline.output_writer import write_output
 from io_pipeline.validation import ValidatedFile
+from pipelines.truth_engine.models import (
+    ExtractionResult,
+    FieldValidationReport,
+    PersistencePolicy,
+    TruthReport,
+)
 
 
 def _make_temp_file(name: str, content: bytes = b"%PDF-1.4 test") -> str:
@@ -94,6 +100,28 @@ def _make_doc(session, doc_id: str) -> Document:
     return doc
 
 
+def _make_truth_report(final_confidence: float = 0.92) -> TruthReport:
+    extraction = ExtractionResult(
+        fields={"surname": "SMITH"}, overall_confidence=final_confidence,
+        context_used=False, sample_count=1,
+    )
+    fvr = FieldValidationReport(
+        required_fields_present=[], required_fields_missing=[],
+        additional_fields=[], coverage_score=1.0,
+    )
+    persistence = PersistencePolicy(
+        allow_completion=True, allow_embedding=True, allow_learning=True
+    )
+    return TruthReport(
+        extraction=extraction,
+        field_validation=fvr,
+        verification_reports=[],
+        final_confidence=final_confidence,
+        decision_reason="test reason",
+        persistence=persistence,
+    )
+
+
 def _make_state(doc_id: str) -> dict:
     return {
         "document_id": doc_id,
@@ -104,7 +132,7 @@ def _make_state(doc_id: str) -> dict:
         },
         "classify_confidence": 0.95,
         "extract_confidence": 0.88,
-        "validate_confidence": 0.92,
+        "truth_report": _make_truth_report(0.92),
         "validation_issues": [],
         "error": None,
         "hitl_required": False,
@@ -142,11 +170,15 @@ def test_write_output_appends_confidence_log(minio_client, postgres_session) -> 
 
     logs = postgres_session.query(ConfidenceLog).filter(ConfidenceLog.document_id == doc_id).all()
     agents = {log.agent for log in logs}
-    assert agents == {"classify", "extract", "validate"}
+    # validate agent replaced by truth_engine in P4.2
+    assert "classify" in agents
+    assert "extract" in agents
+    assert "truth_engine" in agents
+    assert "validate" not in agents
     scores = {log.agent: log.score for log in logs}
     assert scores["classify"] == pytest.approx(0.95)
     assert scores["extract"] == pytest.approx(0.88)
-    assert scores["validate"] == pytest.approx(0.92)
+    assert scores["truth_engine"] == pytest.approx(0.92)
 
 
 def test_write_output_writes_json_to_object_store(minio_client, postgres_session) -> None:
