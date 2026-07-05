@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pipelines.truth_engine.models import TruthReport
 
 
 class Strategy(str, Enum):
     """Strategies the Resolution Engine can choose after a TruthReport.
 
-    Only ACCEPT and RETRY are executable in Phase 5.1.
+    Only ACCEPT and RETRY are executable in Phase 5.2.
     The remaining strategies are architecture placeholders for future phases.
     """
 
@@ -41,13 +45,39 @@ class ExecutionRecord:
 
     execution_history is a list of these stored in GraphState. The planner
     reads history on every pass so it can adapt based on past outcomes.
+
+    strategy_metadata carries strategy-specific context (e.g. which verifiers
+    failed, which fields were missing) for richer history inspection.
+    duration_ms and evidence_after are populated by post-execution hooks
+    when available; None otherwise.
     """
 
     strategy: Strategy
     timestamp: str              # ISO 8601 UTC
     outcome: str                # "accepted" | "retry_scheduled" | "hitl_required" | "rejected"
     confidence_before: float
-    confidence_after: float | None   # set only when the outcome is final (ACCEPT)
+    confidence_after: float | None          # set only when outcome is final (ACCEPT)
+    strategy_metadata: dict = field(default_factory=dict)
+    duration_ms: float | None = None
+    evidence_before: dict | None = None     # snapshot of key metrics at decision time
+    evidence_after: dict | None = None      # snapshot after execution (filled by next pass)
+
+
+@dataclass(frozen=True)
+class PlannerBundle:
+    """Immutable context bundle for ResolutionPlanner.plan().
+
+    Encapsulates every input the planner needs in one object. Frozen to
+    prevent accidental mutation after construction.
+
+    remaining_budget is pre-computed by the node (max_retries − retry_count)
+    so the planner never needs to know how it was derived.
+    """
+
+    truth_report: TruthReport | None
+    execution_history: list[ExecutionRecord]
+    retry_count: int
+    remaining_budget: int
 
 
 @dataclass

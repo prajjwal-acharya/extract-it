@@ -11,6 +11,7 @@ import pytest
 from pipelines.resolution.executor import StrategyExecutor
 from pipelines.resolution.models import (
     ExecutionRecord,
+    PlannerBundle,
     ResolutionDecision,
     RetryPlan,
     Strategy,
@@ -21,6 +22,7 @@ from pipelines.truth_engine.models import (
     FieldValidationReport,
     PersistenceDecision,
     TruthReport,
+    VerificationReport,
 )
 
 
@@ -29,17 +31,40 @@ from pipelines.truth_engine.models import (
 # ---------------------------------------------------------------------------
 
 
-def _make_truth_report(doc_status: str, final_confidence: float = 0.90) -> TruthReport:
+def _make_truth_report(
+    doc_status: str,
+    final_confidence: float = 0.90,
+    required_fields_missing: list | None = None,
+) -> TruthReport:
+    """Build a TruthReport whose evidence aligns with doc_status.
+
+    "verification_failed" → includes a failed VerificationReport so the
+    evidence-driven planner correctly identifies it as a verifier failure.
+    "failed"              → use a low final_confidence so the planner retries.
+    "completed"           → high confidence, no failures, full coverage.
+    """
     allow = doc_status == "completed"
+    missing = required_fields_missing or []
+
+    if doc_status == "verification_failed":
+        verification_reports = [
+            VerificationReport(verifier_name="test_verifier", passed=False, confidence=0.0)
+        ]
+    else:
+        verification_reports = []
+
+    present = [] if missing else []  # no required fields in test schema
     return TruthReport(
         extraction=ExtractionResult(
             fields={}, overall_confidence=final_confidence, context_used=False, sample_count=1
         ),
         field_validation=FieldValidationReport(
-            required_fields_present=[], required_fields_missing=[],
-            additional_fields=[], coverage_score=1.0,
+            required_fields_present=present,
+            required_fields_missing=missing,
+            additional_fields=[],
+            coverage_score=1.0 if not missing else 0.0,
         ),
-        verification_reports=[],
+        verification_reports=verification_reports,
         final_confidence=final_confidence,
         decision_reason="test",
         persistence=PersistenceDecision(
@@ -50,6 +75,26 @@ def _make_truth_report(doc_status: str, final_confidence: float = 0.90) -> Truth
             reason=f"test_reason_for_{doc_status}",
         ),
     )
+
+
+def _plan(
+    truth_report: TruthReport | None,
+    retry_count: int = 0,
+    max_retries: int = 2,
+    execution_history: list | None = None,
+    confidence_threshold: float = 0.85,
+) -> ResolutionDecision:
+    """Convenience wrapper: build PlannerBundle → call ResolutionPlanner.plan()."""
+    planner = ResolutionPlanner(
+        max_retries=max_retries, confidence_threshold=confidence_threshold
+    )
+    bundle = PlannerBundle(
+        truth_report=truth_report,
+        execution_history=execution_history or [],
+        retry_count=retry_count,
+        remaining_budget=max(0, max_retries - retry_count),
+    )
+    return planner.plan(bundle)
 
 
 # ---------------------------------------------------------------------------
@@ -168,31 +213,29 @@ def test_resolution_decision_accept_learning_candidate() -> None:
 
 
 def test_planner_accept_for_completed_document() -> None:
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("completed", 0.92)
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    decision = _plan(report, retry_count=0)
     assert decision.strategy == Strategy.ACCEPT
     assert decision.requires_human is False
 
 
 def test_planner_accept_sets_learning_candidate() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("completed")
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    report = _make_truth_report("completed", 0.92)
+    decision = _plan(report, retry_count=0)
     assert decision.learning_candidate is True
 
 
-def test_planner_accept_reason_includes_persistence_reason() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("completed")
-    decision = planner.plan(report, retry_count=0, execution_history=[])
-    assert "test_reason_for_completed" in decision.reason
+def test_planner_accept_reason_explains_all_signals() -> None:
+    """Accept reason must explain evidence, not pre-computed document_status."""
+    report = _make_truth_report("completed", 0.92)
+    decision = _plan(report, retry_count=0)
+    assert "confidence" in decision.reason
+    assert "coverage" in decision.reason
 
 
 def test_planner_accept_no_retry_plan() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("completed")
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    report = _make_truth_report("completed", 0.92)
+    decision = _plan(report, retry_count=0)
     assert decision.retry_plan is None
 
 
@@ -202,24 +245,21 @@ def test_planner_accept_no_retry_plan() -> None:
 
 
 def test_planner_retry_when_failed_and_retries_remain() -> None:
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("failed", 0.60)
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    decision = _plan(report, retry_count=0)
     assert decision.strategy == Strategy.RETRY
     assert decision.requires_human is False
 
 
 def test_planner_retry_when_verification_failed_and_retries_remain() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("verification_failed")
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    report = _make_truth_report("verification_failed")  # includes failed VerificationReport
+    decision = _plan(report, retry_count=0)
     assert decision.strategy == Strategy.RETRY
 
 
 def test_planner_retry_populates_retry_plan() -> None:
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("failed", 0.60)
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    decision = _plan(report, retry_count=0)
     assert decision.retry_plan is not None
     assert decision.retry_plan.attempt_number == 1
     assert decision.retry_plan.retrieval_strategy == "similarity_search"
@@ -227,20 +267,19 @@ def test_planner_retry_populates_retry_plan() -> None:
 
 
 def test_planner_retry_attempt_number_increments_with_retry_count() -> None:
-    planner = ResolutionPlanner(max_retries=3)
-    report = _make_truth_report("failed")
-    d1 = planner.plan(report, retry_count=0, execution_history=[])
-    d2 = planner.plan(report, retry_count=1, execution_history=[])
+    report = _make_truth_report("failed", 0.60)  # low confidence → always RETRY
+    d1 = _plan(report, retry_count=0, max_retries=3)
+    d2 = _plan(report, retry_count=1, max_retries=3)
     assert d1.retry_plan.attempt_number == 1
     assert d2.retry_plan.attempt_number == 2
 
 
-def test_planner_retry_reason_includes_attempt_context() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("failed")
-    decision = planner.plan(report, retry_count=0, execution_history=[])
-    assert "attempt_1" in decision.reason
-    assert "2" in decision.reason  # max_retries denominator
+def test_planner_retry_reason_explains_failure() -> None:
+    """Retry reason must name the evidence that triggered the retry."""
+    report = _make_truth_report("failed", 0.60)
+    decision = _plan(report, retry_count=0)
+    # Confidence is the primary failure cause → reason names it
+    assert "confidence" in decision.reason.lower() or "threshold" in decision.reason.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -249,32 +288,28 @@ def test_planner_retry_reason_includes_attempt_context() -> None:
 
 
 def test_planner_hitl_when_retries_exhausted() -> None:
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("failed", 0.60)
-    decision = planner.plan(report, retry_count=2, execution_history=[])
+    decision = _plan(report, retry_count=2, max_retries=2)
     assert decision.strategy == Strategy.HITL
     assert decision.requires_human is True
 
 
 def test_planner_hitl_when_truth_report_none() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    decision = planner.plan(None, retry_count=0, execution_history=[])
+    decision = _plan(None, retry_count=0)
     assert decision.strategy == Strategy.HITL
     assert decision.requires_human is True
 
 
-def test_planner_hitl_reason_includes_exhausted_count() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("failed")
-    decision = planner.plan(report, retry_count=2, execution_history=[])
-    assert "retries_exhausted" in decision.reason
-    assert "2" in decision.reason
+def test_planner_hitl_reason_explains_exhaustion() -> None:
+    report = _make_truth_report("failed", 0.60)
+    decision = _plan(report, retry_count=2, max_retries=2)
+    assert "budget" in decision.reason.lower() or "exhausted" in decision.reason.lower()
+    assert "2" in decision.reason  # attempt count mentioned
 
 
 def test_planner_hitl_no_retry_plan() -> None:
-    planner = ResolutionPlanner(max_retries=2)
-    report = _make_truth_report("failed")
-    decision = planner.plan(report, retry_count=2, execution_history=[])
+    report = _make_truth_report("failed", 0.60)
+    decision = _plan(report, retry_count=2, max_retries=2)
     assert decision.retry_plan is None
 
 
@@ -569,27 +604,70 @@ def test_retry_decision_still_routes_to_op_a_retry() -> None:
 
 def test_retry_plan_always_uses_similarity_search() -> None:
     """Regression: current retry uses similarity_search retrieval (no change from P4)."""
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("failed", 0.60)
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    decision = _plan(report, retry_count=0)
     assert decision.retry_plan.retrieval_strategy == "similarity_search"
 
 
 def test_retry_plan_always_uses_standard_prompt() -> None:
     """Regression: prompt_strategy must be 'standard' until prompt refinement is added."""
-    planner = ResolutionPlanner(max_retries=2)
     report = _make_truth_report("failed", 0.60)
-    decision = planner.plan(report, retry_count=0, execution_history=[])
+    decision = _plan(report, retry_count=0)
     assert decision.retry_plan.prompt_strategy == "standard"
 
 
-def test_planner_does_not_inspect_raw_confidence() -> None:
-    """Planner must read document_status, not final_confidence directly."""
-    planner = ResolutionPlanner(max_retries=2)
-    # Same document_status="completed" → same ACCEPT decision regardless of confidence value
-    low_conf_report = _make_truth_report("completed", final_confidence=0.01)
-    high_conf_report = _make_truth_report("completed", final_confidence=0.99)
-    d_low = planner.plan(low_conf_report, retry_count=0, execution_history=[])
-    d_high = planner.plan(high_conf_report, retry_count=0, execution_history=[])
-    assert d_low.strategy == Strategy.ACCEPT
-    assert d_high.strategy == Strategy.ACCEPT
+def test_planner_reads_evidence_not_document_status() -> None:
+    """Phase 5.2: planner reads TruthReport evidence, NOT the pre-computed document_status.
+
+    A TruthReport whose document_status claims 'completed' but whose raw evidence
+    (low confidence) contradicts it must be RETRIED by the evidence-driven planner.
+    """
+    # Build a contradictory report: document_status="completed" but confidence is LOW
+    from pipelines.truth_engine.models import VerificationReport as VR
+    report = TruthReport(
+        extraction=ExtractionResult(
+            fields={}, overall_confidence=0.40, context_used=False, sample_count=1
+        ),
+        field_validation=FieldValidationReport(
+            required_fields_present=[], required_fields_missing=[],
+            additional_fields=[], coverage_score=1.0,
+        ),
+        verification_reports=[],
+        final_confidence=0.40,  # well below 0.85 threshold
+        decision_reason="test",
+        persistence=PersistenceDecision(
+            document_status="completed",  # contradicts the evidence
+            allow_completion=True,
+            allow_embedding=True,
+            allow_learning=True,
+            reason="test",
+        ),
+    )
+    # Evidence-driven planner: confidence=0.40 < 0.85 → RETRY (ignores document_status)
+    decision = _plan(report, retry_count=0)
+    assert decision.strategy == Strategy.RETRY
+
+
+def test_planner_accepts_despite_failing_document_status_when_evidence_is_green() -> None:
+    """Reverse: document_status='failed' but evidence all green → planner ACCEPTs."""
+    report = TruthReport(
+        extraction=ExtractionResult(
+            fields={}, overall_confidence=0.95, context_used=False, sample_count=1
+        ),
+        field_validation=FieldValidationReport(
+            required_fields_present=[], required_fields_missing=[],
+            additional_fields=[], coverage_score=1.0,
+        ),
+        verification_reports=[],
+        final_confidence=0.95,  # above 0.85
+        decision_reason="test",
+        persistence=PersistenceDecision(
+            document_status="failed",   # contradicts the evidence
+            allow_completion=False,
+            allow_embedding=False,
+            allow_learning=False,
+            reason="test",
+        ),
+    )
+    decision = _plan(report, retry_count=0)
+    assert decision.strategy == Strategy.ACCEPT  # evidence wins

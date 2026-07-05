@@ -3,7 +3,7 @@ import typing
 import unittest.mock as mock
 
 from pipelines.nodes.master import master_node
-from pipelines.resolution.models import ResolutionDecision, Strategy
+from pipelines.resolution.models import PlannerBundle, ResolutionDecision, Strategy
 from pipelines.resolution.planner import ResolutionPlanner
 from pipelines.router import route_after_executor
 from pipelines.state import GraphState
@@ -195,7 +195,13 @@ def _make_truth_report(
 
 def _plan(truth_report, retry_count: int = 0, max_retries: int = 2) -> ResolutionDecision:
     planner = ResolutionPlanner(max_retries=max_retries)
-    return planner.plan(truth_report, retry_count, [])
+    bundle = PlannerBundle(
+        truth_report=truth_report,
+        execution_history=[],
+        retry_count=retry_count,
+        remaining_budget=max(0, max_retries - retry_count),
+    )
+    return planner.plan(bundle)
 
 
 def test_planner_routes_to_accept_when_completed() -> None:
@@ -204,12 +210,12 @@ def test_planner_routes_to_accept_when_completed() -> None:
 
 
 def test_planner_routes_to_retry_when_confidence_low_and_retries_remain() -> None:
-    decision = _plan(_make_truth_report(allow_completion=False), retry_count=0)
+    decision = _plan(_make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=0)
     assert decision.strategy == Strategy.RETRY
 
 
 def test_planner_routes_to_hitl_when_retries_exhausted() -> None:
-    decision = _plan(_make_truth_report(allow_completion=False), retry_count=2, max_retries=2)
+    decision = _plan(_make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=2, max_retries=2)
     assert decision.strategy == Strategy.HITL
 
 
