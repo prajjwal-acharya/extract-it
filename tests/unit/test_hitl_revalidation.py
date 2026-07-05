@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import unittest.mock as mock
+from typing import cast
 
 import pytest
 
@@ -28,6 +29,7 @@ from pipelines.truth_engine.models import (
     TruthReport,
     VerificationReport,
 )
+from pipelines.state import GraphState
 
 
 # ---------------------------------------------------------------------------
@@ -76,23 +78,26 @@ def _make_state(
     resolution_decision: ResolutionDecision | None = None,
     execution_history: list | None = None,
     extracted_fields: dict | None = None,
-) -> dict:
-    return {
-        "document_id": "doc-test-001",
-        "doc_type": "passport",
-        "extracted_fields": extracted_fields or {"surname": "SMITH"},
-        "truth_report": truth_report,
-        "resolution_decision": resolution_decision
-        or ResolutionDecision(
-            strategy=Strategy.HITL,
-            reason="low_confidence",
-            requires_human=True,
-        ),
-        "execution_history": execution_history or [],
-        "classify_confidence": 0.95,
-        "extract_confidence": 0.60,
-        "retry_count": 2,
-    }
+) -> GraphState:
+    return cast(
+        GraphState,
+        {
+            "document_id": "doc-test-001",
+            "doc_type": "passport",
+            "extracted_fields": extracted_fields or {"surname": "SMITH"},
+            "truth_report": truth_report,
+            "resolution_decision": resolution_decision
+            or ResolutionDecision(
+                strategy=Strategy.HITL,
+                reason="low_confidence",
+                requires_human=True,
+            ),
+            "execution_history": execution_history or [],
+            "classify_confidence": 0.95,
+            "extract_confidence": 0.60,
+            "retry_count": 2,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +396,7 @@ class TestReplan:
 class TestHITLNodeIntegration:
     def _run_hitl(
         self,
-        state: dict,
+        state: GraphState,
         approved: bool = True,
         corrections: dict | None = None,
     ) -> dict:

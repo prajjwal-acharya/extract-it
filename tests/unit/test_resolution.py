@@ -54,7 +54,7 @@ def _make_truth_report(
     else:
         verification_reports = []
 
-    present = [] if missing else []  # no required fields in test schema
+    present: list[str] = [] if missing else []  # no required fields in test schema
     return TruthReport(
         extraction=ExtractionResult(
             fields={}, overall_confidence=final_confidence, context_used=False, sample_count=1
@@ -354,6 +354,8 @@ def test_planner_retry_attempt_number_increments_with_retry_count() -> None:
     report = _make_truth_report("failed", 0.60)  # low confidence → always RETRY
     d1 = _plan(report, retry_count=0, max_retries=3)
     d2 = _plan(report, retry_count=1, max_retries=3)
+    assert d1.retry_plan is not None
+    assert d2.retry_plan is not None
     assert d1.retry_plan.attempt_number == 1
     assert d2.retry_plan.attempt_number == 2
 
@@ -515,7 +517,7 @@ def test_resolution_planner_node_returns_resolution_decision() -> None:
 def test_resolution_planner_node_missing_truth_report_gives_hitl() -> None:
     from pipelines.nodes.resolution_planner import resolution_planner_node
 
-    state = {
+    state: dict[str, object] = {
         "truth_report": None,
         "retry_count": 0,
         "execution_history": [],
@@ -676,8 +678,11 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
         "retry_count": 0,
         "execution_history": [],
     }
+    from typing import cast
+    from pipelines.state import GraphState
+
     plan_result1 = resolution_planner_node(state1)  # type: ignore[arg-type]
-    exec_result1 = strategy_executor_node({**state1, **plan_result1})  # type: ignore[arg-type]
+    exec_result1 = strategy_executor_node(cast(GraphState, {**state1, **plan_result1}))
     history_pass1: list = exec_result1["execution_history"]
     assert len(history_pass1) == 1
     assert history_pass1[0].strategy == Strategy.PROMPT_REFINEMENT
@@ -689,7 +694,7 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
         "execution_history": history_pass1,
     }
     plan_result2 = resolution_planner_node(state2)  # type: ignore[arg-type]
-    exec_result2 = strategy_executor_node({**state2, **plan_result2})  # type: ignore[arg-type]
+    exec_result2 = strategy_executor_node(cast(GraphState, {**state2, **plan_result2}))
     history_pass2: list = exec_result2["execution_history"]
     assert len(history_pass2) == 1
     assert history_pass2[0].strategy == Strategy.BETTER_RETRIEVAL
@@ -702,7 +707,7 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
         "execution_history": accumulated,
     }
     plan_result3 = resolution_planner_node(state3)  # type: ignore[arg-type]
-    exec_result3 = strategy_executor_node({**state3, **plan_result3})  # type: ignore[arg-type]
+    exec_result3 = strategy_executor_node(cast(GraphState, {**state3, **plan_result3}))
     history_pass3: list = exec_result3["execution_history"]
     assert len(history_pass3) == 1
     assert history_pass3[0].strategy == Strategy.ACCEPT
@@ -738,6 +743,7 @@ def test_retry_plan_always_uses_similarity_search() -> None:
     report = _make_truth_report("failed", 0.60)
     # First pass → PROMPT_REFINEMENT
     d1 = _plan(report, retry_count=0)
+    assert d1.retry_plan is not None
     assert d1.retry_plan.retrieval_strategy == "similarity_search"
 
     # Second pass → RETRY (refinement tried)
@@ -751,6 +757,7 @@ def test_retry_plan_always_uses_similarity_search() -> None:
         strategy_metadata={"prompt_variant": variant},
     )
     d2 = _plan(report, retry_count=1, execution_history=[prior])
+    assert d2.retry_plan is not None
     assert d2.retry_plan.retrieval_strategy == "similarity_search"
 
 
@@ -780,6 +787,7 @@ def test_retry_strategy_uses_standard_prompt_after_all_variant_strategies_tried(
     ]
     decision = _plan(report, retry_count=4, max_retries=8, execution_history=history)
     assert decision.strategy == Strategy.RETRY
+    assert decision.retry_plan is not None
     assert decision.retry_plan.prompt_strategy == "standard"
 
 
@@ -788,6 +796,7 @@ def test_prompt_refinement_uses_refined_prompt_strategy() -> None:
     report = _make_truth_report("failed", 0.60)
     decision = _plan(report, retry_count=0)
     assert decision.strategy == Strategy.PROMPT_REFINEMENT
+    assert decision.retry_plan is not None
     assert decision.retry_plan.prompt_strategy == "refined"
 
 

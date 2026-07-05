@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import unittest.mock as mock
 import uuid
+from typing import cast
 
 import pytest
 
@@ -29,6 +30,7 @@ from db.models import (
 )
 from io_pipeline.output_writer import write_output
 from pipelines.resolution.models import ResolutionDecision, Strategy
+from pipelines.state import GraphState
 from pipelines.truth_engine.models import (
     ExtractionResult,
     FieldValidationReport,
@@ -89,26 +91,29 @@ def _make_state(
     extracted_fields: dict | None = None,
     schema_proposal: dict | None = None,
     hitl_correction: bool = False,
-) -> dict:
-    return {
-        "document_id": doc_id,
-        "filename": "test.pdf",
-        "object_key": "raw/test.pdf",
-        "doc_type": "passport",
-        "truth_report": truth_report,
-        "resolution_decision": resolution_decision,
-        "extracted_fields": extracted_fields or {"passport_number": "X123456"},
-        "universal_schema": {"passport_number": "X123456"},
-        "classify_confidence": 0.95,
-        "extract_confidence": 0.90,
-        "schema_version": "1.0",
-        "schema_proposal": schema_proposal,
-        "hitl_correction": hitl_correction,
-        "execution_history": [],
-        "error": None,
-        "hitl_required": False,
-        "hitl_approved": None,
-    }
+) -> GraphState:
+    return cast(
+        GraphState,
+        {
+            "document_id": doc_id,
+            "filename": "test.pdf",
+            "object_key": "raw/test.pdf",
+            "doc_type": "passport",
+            "truth_report": truth_report,
+            "resolution_decision": resolution_decision,
+            "extracted_fields": extracted_fields or {"passport_number": "X123456"},
+            "universal_schema": {"passport_number": "X123456"},
+            "classify_confidence": 0.95,
+            "extract_confidence": 0.90,
+            "schema_version": "1.0",
+            "schema_proposal": schema_proposal,
+            "hitl_correction": hitl_correction,
+            "execution_history": [],
+            "error": None,
+            "hitl_required": False,
+            "hitl_approved": None,
+        },
+    )
 
 
 def _mock_doc(doc_id: str, session_mock):
@@ -138,7 +143,7 @@ def test_persist_failed_is_valid_document_phase() -> None:
 
 
 class TestSuccessfulPersist:
-    def _run(self, doc_id: str, state: dict):
+    def _run(self, doc_id: str, state: GraphState):
         session = mock.MagicMock()
         doc = _mock_doc(doc_id, session)
 
@@ -222,7 +227,7 @@ class TestSuccessfulPersist:
 
 
 class TestObjectStoreFailure:
-    def _run_with_store_error(self, doc_id: str, state: dict):
+    def _run_with_store_error(self, doc_id: str, state: GraphState):
         session = mock.MagicMock()
         doc = _mock_doc(doc_id, session)
 
@@ -366,7 +371,7 @@ class TestDbPhaseAFailure:
 
 
 class TestPersistenceAuditLog:
-    def _run(self, state: dict):
+    def _run(self, state: GraphState):
         doc_id = state["document_id"]
         session = mock.MagicMock()
         _mock_doc(doc_id, session)
@@ -435,7 +440,7 @@ class TestPersistenceAuditLog:
 
 
 class TestSchemaProposalRecord:
-    def _run(self, state: dict):
+    def _run(self, state: GraphState):
         doc_id = state["document_id"]
         session = mock.MagicMock()
         _mock_doc(doc_id, session)
@@ -520,7 +525,7 @@ class TestSchemaProposalRecord:
 
 
 class TestCorrectionExemplarSourceTag:
-    def _capture_upsert_source(self, state: dict) -> str | None:
+    def _capture_upsert_source(self, state: GraphState) -> str | None:
         doc_id = state["document_id"]
         session = mock.MagicMock()
         _mock_doc(doc_id, session)

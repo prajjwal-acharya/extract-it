@@ -13,6 +13,10 @@ Built from:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pipelines.state import GraphState
 
 
 @dataclass
@@ -47,7 +51,7 @@ class ReviewerPayload:
     )  # [{strategy, outcome, timestamp, confidence_before}]
 
     @classmethod
-    def build(cls, state: dict) -> "ReviewerPayload":
+    def build(cls, state: "GraphState") -> "ReviewerPayload":
         """Construct a ReviewerPayload from the current GraphState."""
         truth_report = state.get("truth_report")
         resolution_decision = state.get("resolution_decision")

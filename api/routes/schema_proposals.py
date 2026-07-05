@@ -92,7 +92,7 @@ def approve_proposal(proposal_id: str, session: Session = Depends(get_db)) -> di
         relaxed_fields=proposal.relaxed_fields_json or [],
     )
     new_version = apply_diff(
-        session, active_row, diff, origin_document_id=proposal.origin_document_id
+        session, active_row, diff, origin_document_id=proposal.origin_document_id or ""
     )
 
     proposal.status = "approved"

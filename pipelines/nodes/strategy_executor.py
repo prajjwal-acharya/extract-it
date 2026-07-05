@@ -53,6 +53,8 @@ def strategy_executor_node(state: GraphState) -> dict:
         they do not leak from a prior pass to the current one.
     """
     decision = state["resolution_decision"]
+    if decision is None:
+        return {}
     truth_report = state.get("truth_report")
     confidence = truth_report.final_confidence if truth_report else 0.0
     evidence = _snapshot_evidence(truth_report)

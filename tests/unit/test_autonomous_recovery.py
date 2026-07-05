@@ -17,6 +17,7 @@ Covers:
 from __future__ import annotations
 
 import io
+from typing import cast
 
 from pipelines.resolution.better_retrieval import BetterRetrievalStrategy
 from pipelines.resolution.directives import Directive, DirectiveEngine
@@ -37,6 +38,7 @@ from pipelines.truth_engine.models import (
     TruthReport,
     VerificationReport,
 )
+from pipelines.state import GraphState
 
 
 # ---------------------------------------------------------------------------
@@ -594,8 +596,8 @@ class TestExecutionAnalytics:
                 prompt_variant="missing_fields:passport_number",
             ),
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         record = result["execution_history"][0]
         assert isinstance(record.directives, list)
@@ -612,8 +614,8 @@ class TestExecutionAnalytics:
             reason="test",
             requires_human=False,
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         record = result["execution_history"][0]
         assert record.model_used is not None
@@ -629,8 +631,8 @@ class TestExecutionAnalytics:
             reason="test",
             requires_human=False,
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         record = result["execution_history"][0]
         assert record.retrieval_count >= 1
@@ -645,14 +647,14 @@ class TestExecutionAnalytics:
             reason="test",
             requires_human=False,
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {
+        result = strategy_executor_node(
+            cast(GraphState, {
                 "resolution_decision": decision,
                 "truth_report": report,
                 "execution_history": [],
                 "raw_bytes": b"",
                 "filename": "doc.pdf",
-            }
+            })
         )
         record = result["execution_history"][0]
         assert isinstance(record.preprocessing_steps, list)
@@ -668,8 +670,8 @@ class TestExecutionAnalytics:
             requires_human=False,
             retry_plan=RetryPlan(1, "test", "similarity_search", "refined"),
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         record = result["execution_history"][0]
         assert record.model_used is None
@@ -707,8 +709,8 @@ class TestStateFieldLifecycle:
             requires_human=False,
             retry_plan=RetryPlan(1, "test", "similarity_search", "refined"),
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         assert result["refined_prompt"] is not None
         assert result["better_retrieval_queries"] is None
@@ -725,8 +727,8 @@ class TestStateFieldLifecycle:
             reason="test",
             requires_human=False,
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         assert result["better_retrieval_queries"] is not None
         assert result["refined_prompt"] is None
@@ -743,8 +745,8 @@ class TestStateFieldLifecycle:
             reason="test",
             requires_human=False,
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         assert result["model_override"] is not None
         assert result["refined_prompt"] is None
@@ -762,8 +764,8 @@ class TestStateFieldLifecycle:
             requires_human=False,
             retry_plan=RetryPlan(1, "test", "similarity_search", "standard"),
         )
-        result = strategy_executor_node(  # type: ignore[arg-type]
-            {"resolution_decision": decision, "truth_report": report, "execution_history": []}
+        result = strategy_executor_node(
+            cast(GraphState, {"resolution_decision": decision, "truth_report": report, "execution_history": []})
         )
         assert result["refined_prompt"] is None
         assert result["better_retrieval_queries"] is None
@@ -817,7 +819,7 @@ class TestPhase5xRegressions:
         decision = ResolutionDecision(
             strategy=Strategy.PROMPT_REFINEMENT, reason="r", requires_human=False
         )
-        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type,typeddict-item]
 
     def test_better_retrieval_routes_to_op_a_retry(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
@@ -826,7 +828,7 @@ class TestPhase5xRegressions:
         decision = ResolutionDecision(
             strategy=Strategy.BETTER_RETRIEVAL, reason="r", requires_human=False
         )
-        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type,typeddict-item]
 
     def test_image_preprocess_routes_to_op_a_retry(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
@@ -835,7 +837,7 @@ class TestPhase5xRegressions:
         decision = ResolutionDecision(
             strategy=Strategy.IMAGE_PREPROCESS, reason="r", requires_human=False
         )
-        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type,typeddict-item]
 
     def test_model_escalation_routes_to_op_a_retry(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
@@ -844,18 +846,18 @@ class TestPhase5xRegressions:
         decision = ResolutionDecision(
             strategy=Strategy.MODEL_ESCALATION, reason="r", requires_human=False
         )
-        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "op_a_retry"  # type: ignore[arg-type,typeddict-item]
 
     def test_hitl_routes_to_op_b_hitl(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
         from pipelines.router import route_after_executor
 
         decision = ResolutionDecision(strategy=Strategy.HITL, reason="r", requires_human=True)
-        assert route_after_executor({"resolution_decision": decision}) == "op_b_hitl"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "op_b_hitl"  # type: ignore[arg-type,typeddict-item]
 
     def test_accept_routes_to_normalize(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
         from pipelines.router import route_after_executor
 
         decision = ResolutionDecision(strategy=Strategy.ACCEPT, reason="r", requires_human=False)
-        assert route_after_executor({"resolution_decision": decision}) == "normalize"  # type: ignore[arg-type]
+        assert route_after_executor({"resolution_decision": decision}) == "normalize"  # type: ignore[arg-type,typeddict-item]

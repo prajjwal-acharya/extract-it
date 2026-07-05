@@ -88,7 +88,7 @@ with col_right:
 refs = doc.get("references") or []
 if refs:
     with st.expander("Similar documents used during extraction"):
-        import pandas as pd
+        import pandas as pd  # type: ignore[import-untyped]
 
         st.dataframe(pd.DataFrame(refs), use_container_width=True)
 

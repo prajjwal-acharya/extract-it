@@ -106,7 +106,7 @@ class TestSchemaProposal:
         assert restored.status == proposal.status
 
     def test_from_dict_with_approved_status(self) -> None:
-        d = {
+        d: dict[str, object] = {
             "doc_type": "passport",
             "proposed_version": "1.1",
             "additions": [],

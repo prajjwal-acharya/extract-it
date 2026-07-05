@@ -454,6 +454,8 @@ class TestDuplicateRefinementPrevention:
         # New failure pattern = missing_fields:passport_number → PROMPT_REFINEMENT still applies
         decision = _plan(report_missing, retry_count=1, execution_history=[prior])
         assert decision.strategy == Strategy.PROMPT_REFINEMENT
+        assert decision.retry_plan is not None
+        assert decision.retry_plan.prompt_variant is not None
         assert decision.retry_plan.prompt_variant.startswith("missing_fields:")
 
     def test_multiple_prior_refinements_tracked_in_retry_plan(self) -> None:
@@ -466,6 +468,7 @@ class TestDuplicateRefinementPrevention:
         # New missing_fields variant → PROMPT_REFINEMENT with prior history
         decision = _plan(report_b, retry_count=1, execution_history=[prior_a])
         assert decision.strategy == Strategy.PROMPT_REFINEMENT
+        assert decision.retry_plan is not None
         assert "low_confidence" in decision.retry_plan.refinement_history
 
     def test_no_infinite_loop_all_strategies_exhausted(self) -> None:

@@ -92,7 +92,7 @@ except ImportError:
         "streamlit-agraph not installed — showing raw data. "
         "Install it with `pip install streamlit-agraph`."
     )
-    import pandas as pd
+    import pandas as pd  # type: ignore[import-untyped]
 
     col_n, col_e = st.columns(2)
     col_n.subheader("Nodes")
