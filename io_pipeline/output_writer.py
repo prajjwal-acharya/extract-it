@@ -5,8 +5,11 @@ from agents.llm_client import embed
 from db.models import ConfidenceLog, Document, TruthAuditLog
 from db.session import get_session
 from db.vector_store import upsert_embedding
+from pipelines.learning.policy import LearningPolicy
 from pipelines.state import GraphState
 from pipelines.truth_engine.models import TruthReport
+
+_learning_policy = LearningPolicy()
 
 
 def write_output(state: GraphState) -> None:
@@ -15,6 +18,10 @@ def write_output(state: GraphState) -> None:
     Status is owned by TruthReport.persistence.document_status. Only HITL
     rejection and pipeline errors may override it. The writer carries no
     business logic of its own.
+
+    Phase 5.5: embedding is now gated behind LearningPolicy.evaluate() rather
+    than the raw allow_embedding flag.  LearningPolicy is the sole authority
+    on whether a document (or human correction) may update the knowledge base.
     """
     truth_report: TruthReport | None = state.get("truth_report")
 
@@ -111,8 +118,23 @@ def write_output(state: GraphState) -> None:
         payload = json.dumps(state.get("universal_schema") or {}).encode()
         store.put(f"output/{state['document_id']}.json", payload, content_type="application/json")
 
-        # Embedding gated on TruthReport.persistence.allow_embedding
-        allow_embed = truth_report.persistence.allow_embedding if truth_report else False
+        # Embedding gated on LearningPolicy (sole authority on knowledge-base updates).
+        # LearningPolicy reads resolution_decision + truth_report + hitl_correction;
+        # it enforces ACCEPT strategy, no verifier failures, and TE allow_learning.
+        resolution_decision = state.get("resolution_decision")
+        execution_history = list(state.get("execution_history") or [])
+        is_correction = bool(state.get("hitl_correction", False))
+
+        learning_decision = None
+        if truth_report is not None and resolution_decision is not None:
+            learning_decision = _learning_policy.evaluate(
+                resolution_decision,
+                truth_report,
+                execution_history,
+                is_human_correction=is_correction,
+            )
+
+        allow_embed = learning_decision.allow_learning if learning_decision is not None else False
         if allow_embed and state.get("extracted_fields"):
             chunk_text = json.dumps(state["extracted_fields"])
             embedding = embed(chunk_text)

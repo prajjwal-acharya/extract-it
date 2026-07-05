@@ -69,6 +69,16 @@ class GraphState(TypedDict):
     # ── Active schema version used for this extraction (audit trail) ────────
     schema_version: str | None
 
+    # ── Learning (Phase 5.5) ────────────────────────────────────────────────
+    # Schema proposal produced by op_a_retry when discovery finds new fields.
+    # Stored as a plain dict (SchemaProposal.to_dict()) so state is JSON-safe.
+    # Requires human approval before apply_diff() activates the new SchemaVersion.
+    schema_proposal: dict | None
+
+    # Set to True by op_b_hitl_node when human corrections were applied.
+    # Read by LearningPolicy to distinguish learn_from_document vs learn_from_correction.
+    hitl_correction: bool
+
     # ── Status and error tracking ───────────────────────────────────────────
     error: str | None
     status: str

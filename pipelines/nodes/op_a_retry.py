@@ -6,7 +6,7 @@ from sqlalchemy import select
 from adapters.factory import get_object_store
 from agents.extract_agent import extract
 from agents.llm_client import embed
-from agents.schema_diff_agent import apply_diff, diff_schema, discover_fields
+from agents.schema_diff_agent import diff_schema, discover_fields, propose_diff
 from db.models import RetrievalLog, SchemaVersion
 from db.session import session_scope
 from db.vector_store import similarity_search
@@ -16,10 +16,15 @@ from shared.utils.mime import mime_from_filename
 log = logging.getLogger(__name__)
 
 
-def _run_schema_discovery(
+def _build_schema_proposal(
     session, doc_type: str, raw_bytes: bytes, mime_type: str, document_id: str
-) -> str | None:
-    """Discover+diff+apply against the active schema. Best-effort — never blocks extraction."""
+) -> tuple[str | None, dict | None]:
+    """Discover fields against the active schema and create a proposal if a diff exists.
+
+    Phase 5.5: schema changes are never auto-applied.  A SchemaProposal is returned
+    and stored in state; a human must approve it before apply_diff() is called.
+    Returns (current_schema_version, proposal_dict | None).
+    """
     try:
         active_row = session.execute(
             select(SchemaVersion).where(
@@ -27,26 +32,27 @@ def _run_schema_discovery(
             )
         ).scalar_one_or_none()
         if active_row is None:
-            return None
+            return None, None
 
         discovered = discover_fields(raw_bytes, mime_type)
         diff = diff_schema(discovered, active_row.fields_json)
-        if diff.is_empty:
-            return active_row.version
 
-        new_version = apply_diff(session, active_row, diff, origin_document_id=document_id)
+        if diff.is_empty:
+            return active_row.version, None
+
+        proposal = propose_diff(active_row, diff, origin_document_id=document_id)
         log.info(
-            "schema_diff_agent: doc_type=%s promoted %s -> %s (+%d fields, %d relaxed)",
+            "schema_proposal: doc_type=%s proposed %s -> %s (+%d fields, %d relaxed) [awaiting approval]",
             doc_type,
             active_row.version,
-            new_version.version,
-            len(diff.additions),
-            len(diff.relaxed_fields),
+            proposal.proposed_version,
+            len(proposal.additions),
+            len(proposal.relaxed_fields),
         )
-        return new_version.version
+        return active_row.version, proposal.to_dict()
     except Exception as e:
-        log.warning("schema_diff_agent failed for doc_type=%s: %s", doc_type, e)
-        return None
+        log.warning("schema_proposal failed for doc_type=%s: %s", doc_type, e)
+        return None, None
 
 
 def op_a_retry_node(state: GraphState) -> dict:
@@ -79,7 +85,9 @@ def op_a_retry_node(state: GraphState) -> dict:
     better_queries = state.get("better_retrieval_queries")
 
     with session_scope() as session:
-        schema_version = _run_schema_discovery(session, doc_type, raw_bytes, mime_type, document_id)
+        schema_version, schema_proposal = _build_schema_proposal(
+            session, doc_type, raw_bytes, mime_type, document_id
+        )
 
         if better_queries:
             # BETTER_RETRIEVAL: run multiple targeted queries, deduplicate by document_id
@@ -142,6 +150,7 @@ def op_a_retry_node(state: GraphState) -> dict:
         "extraction_result": result,
         "retry_count": state["retry_count"] + 1,
         "schema_version": schema_version,
+        "schema_proposal": schema_proposal,  # None when schema is current; dict when changes proposed
         # Clear all strategy fields after consumption
         "refined_prompt": None,
         "better_retrieval_queries": None,

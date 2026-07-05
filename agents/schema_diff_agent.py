@@ -107,6 +107,28 @@ def _bump_version(version: str) -> str:
     return f"{version}.next"  # defensive fallback for unexpected version strings
 
 
+def propose_diff(
+    active_row: SchemaVersion,
+    diff: SchemaDiff,
+    origin_document_id: str,
+) -> "SchemaProposal":
+    """Create a SchemaProposal from a non-empty diff without writing to the database.
+
+    The proposal is returned to the caller (stored in GraphState) and requires
+    explicit human approval before apply_diff() is called to activate it.
+    No SchemaVersion is written here.
+    """
+    from pipelines.learning.schema_proposal import SchemaProposal
+
+    return SchemaProposal(
+        doc_type=active_row.doc_type,
+        proposed_version=_bump_version(active_row.version),
+        additions=diff.additions,
+        relaxed_fields=diff.relaxed_fields,
+        origin_document_id=origin_document_id,
+    )
+
+
 def apply_diff(
     session: Session,
     active_row: SchemaVersion,
@@ -115,7 +137,8 @@ def apply_diff(
 ) -> SchemaVersion:
     """Persist a new SchemaVersion (reference ⊕ diff) and atomically flip is_active.
 
-    Auto-applied per prior decision — no HITL gate on schema evolution itself.
+    Called only when a SchemaProposal has been explicitly approved by a human.
+    Not invoked automatically by the pipeline — use propose_diff() for that.
     """
     new_fields = [dict(f) for f in active_row.fields_json]
     # Guard: array-type fields have nested structure; only collect names for flat scalar fields
