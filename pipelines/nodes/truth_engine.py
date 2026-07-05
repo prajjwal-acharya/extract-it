@@ -9,11 +9,11 @@ from pipelines.truth_engine.models import (
     EvidenceBundle,
     ExtractionResult,
     FieldValidationReport,
-    PersistencePolicy,
+    PersistenceDecision,
     TruthReport,
     VerificationReport,
 )
-from pipelines.truth_engine.verifier_registry import verifier_registry
+from pipelines.truth_engine.verifier_registry import VERIFIER_VERSION, verifier_registry
 
 log = logging.getLogger(__name__)
 
@@ -103,14 +103,14 @@ def truth_engine_node(state: GraphState) -> dict:
         decision_reason,
     )
 
-    # 4. Persistence policy — derived from verification results and confidence
-    persistence = PersistencePolicy.from_truth(
+    # 4. Persistence decision — sole authority on document_status and P6 flags
+    persistence = PersistenceDecision.from_truth(
         verification_reports=verification_reports,
         final_confidence=final_confidence,
         threshold=settings.CONFIDENCE_THRESHOLD,
     )
 
-    # 5. Assemble TruthReport — evidence only, no routing
+    # 5. Assemble TruthReport — evidence + decision, verifier_version for audit replay
     truth_report = TruthReport(
         extraction=extraction,
         field_validation=field_validation,
@@ -118,15 +118,17 @@ def truth_engine_node(state: GraphState) -> dict:
         final_confidence=final_confidence,
         decision_reason=decision_reason,
         persistence=persistence,
+        verifier_version=VERIFIER_VERSION,
     )
     log.info(
         "event=TruthReportCreated doc_type=%s final_confidence=%.4f "
-        "verifiers_run=%d verifiers_passed=%d allow_completion=%s",
+        "verifiers_run=%d verifiers_passed=%d document_status=%s verifier_version=%s",
         doc_type,
         final_confidence,
         len(verification_reports),
         sum(1 for r in verification_reports if r.passed is True),
-        persistence.allow_completion,
+        persistence.document_status,
+        VERIFIER_VERSION,
     )
 
     return {"truth_report": truth_report}

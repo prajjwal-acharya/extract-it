@@ -13,7 +13,7 @@ from io_pipeline.validation import ValidatedFile
 from pipelines.truth_engine.models import (
     ExtractionResult,
     FieldValidationReport,
-    PersistencePolicy,
+    PersistenceDecision,
     TruthReport,
 )
 
@@ -109,8 +109,12 @@ def _make_truth_report(final_confidence: float = 0.92) -> TruthReport:
         required_fields_present=[], required_fields_missing=[],
         additional_fields=[], coverage_score=1.0,
     )
-    persistence = PersistencePolicy(
-        allow_completion=True, allow_embedding=True, allow_learning=True
+    persistence = PersistenceDecision(
+        document_status="completed",
+        allow_completion=True,
+        allow_embedding=True,
+        allow_learning=True,
+        reason="test",
     )
     return TruthReport(
         extraction=extraction,

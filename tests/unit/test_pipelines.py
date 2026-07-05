@@ -9,7 +9,7 @@ from pipelines.truth_engine.models import (
     EvidenceBundle,
     ExtractionResult,
     FieldValidationReport,
-    PersistencePolicy,
+    PersistenceDecision,
     TruthReport,
     VerificationReport,
 )
@@ -168,10 +168,18 @@ def _make_truth_report(
         if verifier_failed
         else []
     )
-    persistence = PersistencePolicy(
-        allow_completion=allow_completion,
-        allow_embedding=allow_completion,
-        allow_learning=allow_completion,
+    if verifier_failed:
+        doc_status, ac = "verification_failed", False
+    elif allow_completion:
+        doc_status, ac = "completed", True
+    else:
+        doc_status, ac = "failed", False
+    persistence = PersistenceDecision(
+        document_status=doc_status,
+        allow_completion=ac,
+        allow_embedding=ac,
+        allow_learning=ac,
+        reason="test",
     )
     return TruthReport(
         extraction=extraction,

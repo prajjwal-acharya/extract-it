@@ -6,23 +6,27 @@ from db.models import ConfidenceLog, Document, TruthAuditLog
 from db.session import get_session
 from db.vector_store import upsert_embedding
 from pipelines.state import GraphState
-from pipelines.truth_engine.models import TruthReport, status_from_truth_report
+from pipelines.truth_engine.models import TruthReport
 
 
 def write_output(state: GraphState) -> None:
     """Persist pipeline results to Postgres and the object store.
 
-    Status and persistence decisions derive from TruthReport — no logic is
-    reimplemented here. The writer is a pure side-effect layer.
+    Status is owned by TruthReport.persistence.document_status. Only HITL
+    rejection and pipeline errors may override it. The writer carries no
+    business logic of its own.
     """
     truth_report: TruthReport | None = state.get("truth_report")
 
-    status = status_from_truth_report(
-        truth_report,
-        error=state.get("error"),
-        hitl_required=bool(state.get("hitl_required")),
-        hitl_approved=state.get("hitl_approved"),
-    )
+    # Minimal override layer — Truth Engine owns the business decision.
+    if state.get("error"):
+        status = "failed"
+    elif state.get("hitl_required") and not state.get("hitl_approved"):
+        status = "rejected"
+    elif truth_report is not None:
+        status = truth_report.persistence.document_status
+    else:
+        status = "failed"
 
     session = get_session()
     try:
@@ -72,7 +76,7 @@ def write_output(state: GraphState) -> None:
                 )
             )
 
-        # TruthAuditLog — persists full evidence bundle for audit and ML
+        # TruthAuditLog — full evidence bundle for audit replay and ML
         if truth_report is not None:
             session.add(
                 TruthAuditLog(
@@ -92,9 +96,12 @@ def write_output(state: GraphState) -> None:
                         }
                         for r in truth_report.verification_reports
                     ],
+                    document_status=truth_report.persistence.document_status,
                     allow_completion=truth_report.persistence.allow_completion,
                     allow_embedding=truth_report.persistence.allow_embedding,
                     allow_learning=truth_report.persistence.allow_learning,
+                    persistence_reason=truth_report.persistence.reason,
+                    verifier_version=truth_report.verifier_version,
                 )
             )
 

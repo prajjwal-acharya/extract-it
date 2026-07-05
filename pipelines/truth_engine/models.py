@@ -79,16 +79,21 @@ class EvidenceBundle:
 
 
 @dataclass
-class PersistencePolicy:
-    """Flags that downstream persistence (P6) must obey.
+class PersistenceDecision:
+    """Computed downstream decision that P6 must execute without re-deriving.
 
-    Computed by the Truth Engine after confidence fusion. Business logic lives
-    here; the persistence layer must not re-implement it.
+    Truth Engine is the sole authority. Persistence layer reads and obeys;
+    it must not re-implement any of the business logic encoded here.
+
+    document_status: canonical document status (completed|verification_failed|failed)
+    reason:          human-readable explanation for audit replay
     """
 
+    document_status: str
     allow_completion: bool
     allow_embedding: bool
     allow_learning: bool
+    reason: str
 
     @classmethod
     def from_truth(
@@ -96,18 +101,34 @@ class PersistencePolicy:
         verification_reports: list[VerificationReport],
         final_confidence: float,
         threshold: float = 0.85,
-    ) -> "PersistencePolicy":
-        """Derive persistence policy from verification results and confidence.
+    ) -> "PersistenceDecision":
+        """Compute the persistence decision from verification results and confidence.
 
-        Rule: any deterministic failure (passed=False) blocks all persistence.
-        Otherwise, allow_completion requires final_confidence >= threshold;
-        allow_embedding and allow_learning follow allow_completion.
+        Rule: any deterministic failure (passed=False) → verification_failed status,
+        all flags False. Otherwise, allow_* follows final_confidence >= threshold.
         """
         hard_fail = any(r.passed is False for r in verification_reports)
         if hard_fail:
-            return cls(allow_completion=False, allow_embedding=False, allow_learning=False)
+            failed = [r.verifier_name for r in verification_reports if r.passed is False]
+            return cls(
+                document_status="verification_failed",
+                allow_completion=False,
+                allow_embedding=False,
+                allow_learning=False,
+                reason=f"deterministic_failure:[{','.join(failed)}]",
+            )
         allow = final_confidence >= threshold
-        return cls(allow_completion=allow, allow_embedding=allow, allow_learning=allow)
+        return cls(
+            document_status="completed" if allow else "failed",
+            allow_completion=allow,
+            allow_embedding=allow,
+            allow_learning=allow,
+            reason=(
+                f"confidence_above_threshold:{final_confidence:.4f}"
+                if allow
+                else f"confidence_below_threshold:{final_confidence:.4f}"
+            ),
+        )
 
 
 @dataclass
@@ -115,7 +136,8 @@ class TruthReport:
     """Phase 4 evidence object. Explains why final_confidence is what it is.
 
     TruthReport is never a routing decision — it is evidence that informs one.
-    After Phase 4.2, routing and persistence decisions derive from this object.
+    Routing, persistence, and status derivation all consume this object.
+    verifier_version tags which verifier set produced the evidence (audit replay).
     """
 
     extraction: ExtractionResult
@@ -123,34 +145,13 @@ class TruthReport:
     verification_reports: list[VerificationReport]
     final_confidence: float
     decision_reason: str
-    persistence: PersistencePolicy = field(
-        default_factory=lambda: PersistencePolicy(
-            allow_completion=True, allow_embedding=True, allow_learning=True
+    persistence: PersistenceDecision = field(
+        default_factory=lambda: PersistenceDecision(
+            document_status="completed",
+            allow_completion=True,
+            allow_embedding=True,
+            allow_learning=True,
+            reason="default",
         )
     )
-
-
-def status_from_truth_report(
-    truth_report: TruthReport | None,
-    *,
-    error: str | None = None,
-    hitl_required: bool = False,
-    hitl_approved: bool | None = None,
-) -> str:
-    """Derive the document's final status string from TruthReport evidence.
-
-    All status computation is centralised here — no node should compute status
-    independently from scattered flags.
-    """
-    if error:
-        return "failed"
-    if hitl_required and not hitl_approved:
-        return "rejected"
-    if truth_report is None:
-        return "failed"
-    hard_fail = any(r.passed is False for r in truth_report.verification_reports)
-    if hard_fail:
-        return "verification_failed"
-    if truth_report.persistence.allow_completion:
-        return "completed"
-    return "failed"
+    verifier_version: str = "unknown"

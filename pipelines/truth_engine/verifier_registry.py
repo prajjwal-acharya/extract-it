@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 MAX_TOOL_CALLS = 3
+VERIFIER_VERSION = "1.0"
 
 
 @dataclass

@@ -172,9 +172,14 @@ class TruthAuditLog(Base):
     # VerificationReport list — serialised as [{"verifier_name": ..., "passed": ..., ...}]
     verification_reports: Mapped[list] = mapped_column(JSON, nullable=False)
 
-    # Persistence policy flags
+    # PersistenceDecision — computed by Truth Engine; P6 reads these verbatim
+    document_status: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
     allow_completion: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allow_embedding: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allow_learning: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    persistence_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # Verifier set version — enables audit replay when verifier logic changes
+    verifier_version: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

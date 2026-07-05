@@ -10,13 +10,13 @@ from pipelines.truth_engine.models import (
     EvidenceBundle,
     ExtractionResult,
     FieldValidationReport,
-    PersistencePolicy,
+    PersistenceDecision,
     TruthReport,
     VerificationReport,
-    status_from_truth_report,
 )
 from pipelines.truth_engine.verifier_registry import (
     MAX_TOOL_CALLS,
+    VERIFIER_VERSION,
     VerifierRegistry,
     VerifierSpec,
     verifier_registry,
@@ -770,58 +770,84 @@ def test_truth_engine_node_truth_report_has_no_routing_fields() -> None:
 
 
 # ---------------------------------------------------------------------------
-# PersistencePolicy
+# PersistenceDecision
 # ---------------------------------------------------------------------------
 
 
-def test_persistence_policy_hard_fail_blocks_all() -> None:
+def test_persistence_decision_hard_fail_sets_verification_failed_status() -> None:
     vr = VerificationReport(verifier_name="mrz_checksum", passed=False, confidence=0.0)
-    policy = PersistencePolicy.from_truth([vr], final_confidence=0.99)
-    assert policy.allow_completion is False
-    assert policy.allow_embedding is False
-    assert policy.allow_learning is False
+    decision = PersistenceDecision.from_truth([vr], final_confidence=0.99)
+    assert decision.document_status == "verification_failed"
+    assert decision.allow_completion is False
+    assert decision.allow_embedding is False
+    assert decision.allow_learning is False
 
 
-def test_persistence_policy_not_attempted_does_not_block() -> None:
+def test_persistence_decision_hard_fail_reason_names_failed_verifier() -> None:
+    vr = VerificationReport(verifier_name="mrz_checksum", passed=False, confidence=0.0)
+    decision = PersistenceDecision.from_truth([vr], final_confidence=0.99)
+    assert "mrz_checksum" in decision.reason
+    assert "deterministic_failure" in decision.reason
+
+
+def test_persistence_decision_not_attempted_does_not_block() -> None:
     vr = VerificationReport(verifier_name="mrz_checksum", passed=None, confidence=0.0)
-    policy = PersistencePolicy.from_truth([vr], final_confidence=0.92, threshold=0.85)
-    assert policy.allow_completion is True
+    decision = PersistenceDecision.from_truth([vr], final_confidence=0.92, threshold=0.85)
+    assert decision.document_status == "completed"
+    assert decision.allow_completion is True
 
 
-def test_persistence_policy_no_verifiers_uses_confidence_threshold() -> None:
-    low = PersistencePolicy.from_truth([], final_confidence=0.50, threshold=0.85)
+def test_persistence_decision_low_confidence_sets_failed_status() -> None:
+    low = PersistenceDecision.from_truth([], final_confidence=0.50, threshold=0.85)
+    assert low.document_status == "failed"
     assert low.allow_completion is False
-    high = PersistencePolicy.from_truth([], final_confidence=0.90, threshold=0.85)
+
+
+def test_persistence_decision_high_confidence_sets_completed_status() -> None:
+    high = PersistenceDecision.from_truth([], final_confidence=0.90, threshold=0.85)
+    assert high.document_status == "completed"
     assert high.allow_completion is True
 
 
-def test_persistence_policy_allow_embedding_equals_allow_completion() -> None:
-    policy = PersistencePolicy.from_truth([], final_confidence=0.90, threshold=0.85)
-    assert policy.allow_embedding == policy.allow_completion
-    assert policy.allow_learning == policy.allow_completion
+def test_persistence_decision_allow_embedding_equals_allow_completion() -> None:
+    decision = PersistenceDecision.from_truth([], final_confidence=0.90, threshold=0.85)
+    assert decision.allow_embedding == decision.allow_completion
+    assert decision.allow_learning == decision.allow_completion
 
 
-def test_persistence_policy_multiple_verifiers_one_fails_blocks_all() -> None:
+def test_persistence_decision_reason_includes_confidence() -> None:
+    above = PersistenceDecision.from_truth([], final_confidence=0.9200, threshold=0.85)
+    assert "0.9200" in above.reason
+    assert "above" in above.reason
+    below = PersistenceDecision.from_truth([], final_confidence=0.5000, threshold=0.85)
+    assert "0.5000" in below.reason
+    assert "below" in below.reason
+
+
+def test_persistence_decision_multiple_verifiers_one_fails_blocks_all() -> None:
     reports = [
         VerificationReport("v1", passed=True, confidence=1.0),
         VerificationReport("v2", passed=False, confidence=0.0),
     ]
-    policy = PersistencePolicy.from_truth(reports, final_confidence=0.95)
-    assert policy.allow_completion is False
+    decision = PersistenceDecision.from_truth(reports, final_confidence=0.95)
+    assert decision.document_status == "verification_failed"
+    assert decision.allow_completion is False
 
 
-def test_truth_engine_node_populates_persistence_policy() -> None:
+def test_truth_engine_node_populates_persistence_decision() -> None:
     from pipelines.nodes.truth_engine import truth_engine_node
 
     result = truth_engine_node(_make_state())
     report: TruthReport = result["truth_report"]
     assert hasattr(report, "persistence")
-    assert isinstance(report.persistence, PersistencePolicy)
+    assert isinstance(report.persistence, PersistenceDecision)
     assert isinstance(report.persistence.allow_completion, bool)
+    assert report.persistence.document_status in ("completed", "verification_failed", "failed")
+    assert report.persistence.reason != ""
 
 
 # ---------------------------------------------------------------------------
-# status_from_truth_report
+# document_status via PersistenceDecision
 # ---------------------------------------------------------------------------
 
 
@@ -842,10 +868,21 @@ def _make_truth_report_for_status(
         if verifier_failed
         else []
     )
-    persistence = PersistencePolicy(
-        allow_completion=allow_completion,
-        allow_embedding=allow_completion,
-        allow_learning=allow_completion,
+    if verifier_failed:
+        doc_status = "verification_failed"
+        ac = False
+    elif allow_completion:
+        doc_status = "completed"
+        ac = True
+    else:
+        doc_status = "failed"
+        ac = False
+    persistence = PersistenceDecision(
+        document_status=doc_status,
+        allow_completion=ac,
+        allow_embedding=ac,
+        allow_learning=ac,
+        reason="test",
     )
     return TruthReport(
         extraction=extraction,
@@ -857,38 +894,31 @@ def _make_truth_report_for_status(
     )
 
 
-def test_status_completed_when_allow_completion() -> None:
+def test_document_status_completed_when_high_confidence() -> None:
+    decision = PersistenceDecision.from_truth([], final_confidence=0.95, threshold=0.85)
+    assert decision.document_status == "completed"
+
+
+def test_document_status_failed_when_low_confidence() -> None:
+    decision = PersistenceDecision.from_truth([], final_confidence=0.50, threshold=0.85)
+    assert decision.document_status == "failed"
+
+
+def test_document_status_verification_failed_on_verifier_failure() -> None:
+    vr = VerificationReport("mrz_checksum", passed=False, confidence=0.0)
+    decision = PersistenceDecision.from_truth([vr], final_confidence=0.99)
+    assert decision.document_status == "verification_failed"
+
+
+def test_document_status_from_truth_report_field() -> None:
     report = _make_truth_report_for_status(allow_completion=True)
-    assert status_from_truth_report(report) == "completed"
+    assert report.persistence.document_status == "completed"
 
+    report_failed = _make_truth_report_for_status(allow_completion=False)
+    assert report_failed.persistence.document_status == "failed"
 
-def test_status_failed_when_allow_completion_false() -> None:
-    report = _make_truth_report_for_status(allow_completion=False)
-    assert status_from_truth_report(report) == "failed"
-
-
-def test_status_verification_failed_when_verifier_fails() -> None:
-    report = _make_truth_report_for_status(verifier_failed=True)
-    assert status_from_truth_report(report) == "verification_failed"
-
-
-def test_status_rejected_when_hitl_not_approved() -> None:
-    report = _make_truth_report_for_status(allow_completion=True)
-    assert status_from_truth_report(report, hitl_required=True, hitl_approved=False) == "rejected"
-
-
-def test_status_failed_when_error_present() -> None:
-    report = _make_truth_report_for_status(allow_completion=True)
-    assert status_from_truth_report(report, error="pipeline error") == "failed"
-
-
-def test_status_failed_when_truth_report_none() -> None:
-    assert status_from_truth_report(None) == "failed"
-
-
-def test_status_error_takes_precedence_over_verifier_failure() -> None:
-    report = _make_truth_report_for_status(verifier_failed=True)
-    assert status_from_truth_report(report, error="boom") == "failed"
+    report_vf = _make_truth_report_for_status(verifier_failed=True)
+    assert report_vf.persistence.document_status == "verification_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -1102,8 +1132,8 @@ def test_op_a_retry_routes_to_truth_engine_in_graph() -> None:
     assert "truth_engine" in retry_destinations
 
 
-def test_truth_report_includes_persistence_policy() -> None:
-    """TruthReport must carry persistence flags — P6 reads them."""
+def test_truth_report_includes_persistence_decision() -> None:
+    """TruthReport must carry PersistenceDecision — P6 reads it verbatim."""
     report = TruthReport(
         extraction=ExtractionResult(
             fields={}, overall_confidence=0.9, context_used=False, sample_count=1
@@ -1115,12 +1145,18 @@ def test_truth_report_includes_persistence_policy() -> None:
         verification_reports=[],
         final_confidence=0.9,
         decision_reason="ok",
-        persistence=PersistencePolicy(
-            allow_completion=True, allow_embedding=True, allow_learning=True
+        persistence=PersistenceDecision(
+            document_status="completed",
+            allow_completion=True,
+            allow_embedding=True,
+            allow_learning=True,
+            reason="test",
         ),
     )
+    assert report.persistence.document_status == "completed"
     assert report.persistence.allow_completion is True
     assert report.persistence.allow_embedding is True
+    assert report.persistence.reason != ""
 
 
 def test_verification_failure_blocks_completion_end_to_end() -> None:
@@ -1140,8 +1176,7 @@ def test_verification_failure_blocks_completion_end_to_end() -> None:
 
     report: TruthReport = result["truth_report"]
     assert report.persistence.allow_completion is False
-    derived = status_from_truth_report(report)
-    assert derived == "verification_failed"
+    assert report.persistence.document_status == "verification_failed"
 
 
 def test_output_writer_logs_truth_engine_confidence(minio_client, postgres_session) -> None:
@@ -1185,3 +1220,145 @@ def test_output_writer_logs_truth_engine_confidence(minio_client, postgres_sessi
     assert "validate" not in agents
     te_log = next(l for l in logs if l.agent == "truth_engine")
     assert te_log.score == pytest.approx(0.88)
+
+
+# ---------------------------------------------------------------------------
+# Verifier version
+# ---------------------------------------------------------------------------
+
+
+def test_verifier_version_constant_exists() -> None:
+    assert VERIFIER_VERSION == "1.0"
+
+
+def test_truth_engine_node_stamps_verifier_version() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    result = truth_engine_node(_make_state())
+    report: TruthReport = result["truth_report"]
+    assert report.verifier_version == VERIFIER_VERSION
+
+
+def test_truth_report_default_verifier_version_is_unknown() -> None:
+    """TruthReport constructed without verifier_version gets 'unknown' sentinel."""
+    report = TruthReport(
+        extraction=ExtractionResult(
+            fields={}, overall_confidence=0.9, context_used=False, sample_count=1
+        ),
+        field_validation=FieldValidationReport(
+            required_fields_present=[], required_fields_missing=[],
+            additional_fields=[], coverage_score=1.0,
+        ),
+        verification_reports=[],
+        final_confidence=0.9,
+        decision_reason="ok",
+        persistence=PersistenceDecision(
+            document_status="completed",
+            allow_completion=True,
+            allow_embedding=True,
+            allow_learning=True,
+            reason="test",
+        ),
+    )
+    assert report.verifier_version == "unknown"
+
+
+def test_verifier_version_in_truth_audit_log(minio_client, postgres_session) -> None:
+    """TruthAuditLog must persist verifier_version for audit replay."""
+    import uuid
+    from io_pipeline.output_writer import write_output
+    from db.models import Document, TruthAuditLog
+
+    doc_id = str(uuid.uuid4())
+    postgres_session.add(Document(
+        id=doc_id,
+        filename="passport_P001_20240101.pdf",
+        object_key="raw/passport_P001_20240101.pdf",
+        status="queued",
+    ))
+    postgres_session.commit()
+
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    te_state = _make_state(doc_type="passport", classify_confidence=0.95)
+    te_result = truth_engine_node(te_state)
+    truth_report = te_result["truth_report"]
+
+    state = {
+        "document_id": doc_id,
+        "universal_schema": {},
+        "classify_confidence": 0.95,
+        "extract_confidence": 0.88,
+        "truth_report": truth_report,
+        "error": None,
+        "hitl_required": False,
+        "hitl_approved": None,
+    }
+    with (
+        mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
+        mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
+    ):
+        write_output(state)
+
+    audit = postgres_session.query(TruthAuditLog).filter(
+        TruthAuditLog.document_id == doc_id
+    ).one()
+    assert audit.verifier_version == VERIFIER_VERSION
+    assert audit.document_status in ("completed", "verification_failed", "failed")
+    assert audit.persistence_reason != ""
+
+
+# ---------------------------------------------------------------------------
+# Audit serialization
+# ---------------------------------------------------------------------------
+
+
+def test_truth_audit_log_serializes_verification_reports(minio_client, postgres_session) -> None:
+    """TruthAuditLog.verification_reports must be a serializable list of dicts."""
+    import uuid
+    from io_pipeline.output_writer import write_output
+    from db.models import Document, TruthAuditLog
+
+    doc_id = str(uuid.uuid4())
+    postgres_session.add(Document(
+        id=doc_id,
+        filename="bank_statement_A001_20240101.pdf",
+        object_key="raw/bank_statement_A001_20240101.pdf",
+        status="queued",
+    ))
+    postgres_session.commit()
+
+    truth_report = _make_truth_report_for_status(final_confidence=0.90)
+    state = {
+        "document_id": doc_id,
+        "universal_schema": {},
+        "classify_confidence": 0.9,
+        "extract_confidence": 0.88,
+        "truth_report": truth_report,
+        "error": None,
+        "hitl_required": False,
+        "hitl_approved": None,
+    }
+    with (
+        mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
+        mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
+    ):
+        write_output(state)
+
+    audit = postgres_session.query(TruthAuditLog).filter(
+        TruthAuditLog.document_id == doc_id
+    ).one()
+    assert isinstance(audit.verification_reports, list)
+    assert audit.allow_completion == truth_report.persistence.allow_completion
+    assert audit.document_status == truth_report.persistence.document_status
+    assert audit.persistence_reason == truth_report.persistence.reason
+
+
+def test_persistence_decision_has_no_status_from_truth_report_function() -> None:
+    """Regression: status_from_truth_report must not exist — status lives in PersistenceDecision."""
+    import pipelines.truth_engine.models as m
+
+    assert not hasattr(m, "status_from_truth_report"), (
+        "status_from_truth_report was removed in Phase 4 freeze. "
+        "Use truth_report.persistence.document_status."
+    )
