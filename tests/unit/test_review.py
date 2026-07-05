@@ -85,14 +85,7 @@ def test_decision_passes_with_correct_api_key(client, monkeypatch) -> None:
 def test_decision_allows_valid_correction_fields(client, monkeypatch) -> None:
     """Valid passport field in corrections should not raise 422."""
     monkeypatch.setattr("api.routes.review.settings.REVIEW_API_KEY", "")
-    with (
-        mock.patch(_GRAPH_PATCH, return_value=_mock_graph()),
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch("api.routes.review.upsert_embedding"),
-    ):
-        mock_client_fn.return_value.models.embed_content.return_value = mock.MagicMock(
-            embeddings=[mock.MagicMock(values=[0.0] * 768)]
-        )
+    with mock.patch(_GRAPH_PATCH, return_value=_mock_graph()):
         resp = client.post(
             "/review/some-doc-id/decision",
             json={"approved": True, "corrections": {"surname": "CORRECTED"}},

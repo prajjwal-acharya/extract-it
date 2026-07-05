@@ -10,6 +10,7 @@ from api.routes.ingest import router as ingest_router
 from api.routes.knowledge_graph import router as knowledge_graph_router
 from api.routes.query import router as query_router
 from api.routes.review import router as review_router
+from api.routes.schema_proposals import router as schema_proposals_router
 from config.settings import settings
 from io_pipeline.orchestrator import IngestionOrchestrator
 from observability.langsmith_setup import setup_langsmith
@@ -68,6 +69,7 @@ app.include_router(query_router, prefix="/query", tags=["query"])
 app.include_router(review_router, prefix="/review", tags=["review"])
 app.include_router(documents_router, prefix="/documents", tags=["documents"])
 app.include_router(knowledge_graph_router, prefix="/knowledge-graph", tags=["knowledge-graph"])
+app.include_router(schema_proposals_router, prefix="/schema-proposals", tags=["schema-proposals"])
 
 
 @app.get("/health")

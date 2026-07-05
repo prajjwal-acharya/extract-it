@@ -31,6 +31,7 @@ DOCUMENT_PHASES = (
     "rejected",
     "verification_failed",
     "failed",
+    "persist_failed",  # P6: all pipeline phases succeeded but persist operation failed
 )
 
 
@@ -183,3 +184,66 @@ class TruthAuditLog(Base):
     verifier_version: Mapped[str] = mapped_column(String, nullable=False, default="unknown")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PersistenceAuditLog(Base):
+    """Durable snapshot of every decision made during a document's pipeline run.
+
+    Written atomically with the final status update. Stores ResolutionDecision,
+    LearningDecision, and (optionally) the SchemaProposal dict so the complete
+    decision chain can be replayed or audited without recomputation.
+    """
+
+    __tablename__ = "persistence_audit_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False, index=True)
+
+    # ResolutionDecision snapshot
+    resolution_strategy: Mapped[str | None] = mapped_column(String, nullable=True)
+    resolution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_requires_human: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    learning_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # LearningDecision snapshot
+    allow_learning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    learn_from_document: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    learn_from_correction: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    schema_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    learning_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # SchemaProposal — only present when schema_candidate is True
+    schema_proposal_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Persist outcome
+    persist_status: Mapped[str] = mapped_column(String, nullable=False)  # completed | persist_failed
+    persist_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SchemaProposalRecord(Base):
+    """DB-backed SchemaProposal awaiting human approval.
+
+    Created by write_output when LearningDecision.schema_candidate is True.
+    Approval workflow: PENDING → APPROVED → apply_diff → new SchemaVersion
+                      PENDING → REJECTED (auditable, never deleted)
+    """
+
+    __tablename__ = "schema_proposal_records"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    doc_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    proposed_version: Mapped[str] = mapped_column(String, nullable=False)
+    additions_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    relaxed_fields_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    origin_document_id: Mapped[str | None] = mapped_column(
+        ForeignKey("documents.id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_schema_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
