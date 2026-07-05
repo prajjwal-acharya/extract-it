@@ -30,7 +30,7 @@ def _parse_envelope(raw: str, doc_type: str) -> tuple[dict, float]:
         fields = {
             k: v for k, v in envelope.items() if k not in ("overall_confidence", "confidence")
         }
-        confidence = float(envelope.get("overall_confidence", envelope.get("confidence", 0.9)))
+        confidence = float(envelope.get("overall_confidence") or envelope.get("confidence") or 0.9)
 
     return fields, confidence
 
