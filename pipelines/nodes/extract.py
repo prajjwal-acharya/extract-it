@@ -62,8 +62,9 @@ def extract_node(state: GraphState) -> dict:
     update: dict = {
         "extracted_fields": result.fields,
         "extract_confidence": result.overall_confidence,
-        "tool_call_count": 0,       # Phase 4 will populate via VerifierRegistry
-        "verification_passed": None,  # Phase 4 will populate via VerificationReport
+        "extraction_result": result,
+        "tool_call_count": 0,
+        "verification_passed": None,  # Phase 4 truth_engine_node will populate this
     }
     if not result.success:
         update["error"] = result.error

@@ -4,6 +4,7 @@ from typing_extensions import TypedDict
 import operator
 
 from pipelines.routing_engine import ClassificationContext
+from pipelines.truth_engine.models import ExtractionResult, TruthReport
 
 
 def _keep_last(current: object, update: object) -> object:
@@ -35,6 +36,14 @@ class GraphState(TypedDict):
     # it needs a reducer to avoid LangGraph update-conflict errors.
     extracted_fields: Annotated[dict, _keep_last]
     extract_confidence: float
+    # Full typed extraction result — preserves context_used, sample_count,
+    # retrieval_metadata that scatter otherwise across state fields.
+    extraction_result: ExtractionResult | None
+
+    # ── Truth Engine outputs (Phase 4) ──────────────────────────────────────
+    # Evidence object produced once after first extraction.
+    # Not yet used for routing (Phase 4.2 will wire that).
+    truth_report: TruthReport | None
 
     # ── Validate node outputs ───────────────────────────────────────────────
     # validation_issues is accumulated across retry passes; operator.add

@@ -13,6 +13,7 @@ from pipelines.nodes.master import master_node
 from pipelines.nodes.normalize import normalize_node
 from pipelines.nodes.op_a_retry import op_a_retry_node
 from pipelines.nodes.op_b_hitl import op_b_hitl_node
+from pipelines.nodes.truth_engine import truth_engine_node
 from pipelines.nodes.unknown_handler import unknown_handler_node
 from pipelines.nodes.validate import validate_node
 from pipelines.registry import RoutingAction
@@ -26,6 +27,7 @@ _PHASE_MAP = {
     "classify": "classifying",
     "unknown_handler": "routing_failed",
     "extract": "extracting",
+    "truth_engine": "evaluating",
     "validate": "validating",
     "op_a_retry": "retrying",
     "op_b_hitl": "awaiting_review",
@@ -72,7 +74,7 @@ def build_graph() -> CompiledStateGraph:
         master → classify →[route]→ extract (PROCEED)
                                   → unknown_handler (UNKNOWN | FAILURE)
         unknown_handler → persist → END
-        extract → validate →[route]→ normalize | op_a_retry | op_b_hitl
+        extract → truth_engine → validate →[route]→ normalize | op_a_retry | op_b_hitl
         op_a_retry → validate
         op_b_hitl →[route]→ normalize | persist
         normalize → persist → END
@@ -84,6 +86,7 @@ def build_graph() -> CompiledStateGraph:
         ("classify", classify_node),
         ("unknown_handler", unknown_handler_node),
         ("extract", extract_node),
+        ("truth_engine", truth_engine_node),
         ("validate", validate_node),
         ("normalize", normalize_node),
         ("op_a_retry", op_a_retry_node),
@@ -101,7 +104,8 @@ def build_graph() -> CompiledStateGraph:
     )
     builder.add_edge("unknown_handler", "persist")
 
-    builder.add_edge("extract", "validate")
+    builder.add_edge("extract", "truth_engine")
+    builder.add_edge("truth_engine", "validate")
     builder.add_conditional_edges(
         "validate",
         route_after_validate,

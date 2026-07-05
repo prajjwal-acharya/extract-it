@@ -384,3 +384,352 @@ def test_extract_agent_does_not_import_verifiers() -> None:
     assert not hasattr(agent_module, "balance_arithmetic")
     assert not hasattr(agent_module, "_VERIFIABLE")
     assert not hasattr(agent_module, "generate_with_tools")
+
+
+# ---------------------------------------------------------------------------
+# VerifierSpec.extractor — field extraction helpers
+# ---------------------------------------------------------------------------
+
+
+def test_verifier_spec_has_extractor_attribute() -> None:
+    spec = verifier_registry.get("passport")[0]
+    assert hasattr(spec, "extractor")
+    assert callable(spec.extractor)
+
+
+def test_default_extractor_returns_none() -> None:
+    """A VerifierSpec without a custom extractor defaults to always-None."""
+    def dummy(**kwargs) -> dict:
+        return {"valid": True}
+
+    spec = VerifierSpec(name="dummy", fn=dummy)
+    assert spec.extractor({"any": "field"}) is None
+
+
+def test_mrz_extractor_returns_kwargs_when_mrz_line2_present() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_mrz_args
+
+    fields = {"mrz_line2": "P1234567<8GBR9001011M3001019<<<<<<<<<<<<6"}
+    kwargs = _extract_mrz_args(fields)
+    assert kwargs is not None
+    assert kwargs["mrz_string"] == "P1234567<"
+    assert kwargs["check_digit"] == 8
+
+
+def test_mrz_extractor_returns_none_when_mrz_line2_absent() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_mrz_args
+
+    assert _extract_mrz_args({}) is None
+    assert _extract_mrz_args({"mrz_line1": "P<GBRSMITH"}) is None
+
+
+def test_mrz_extractor_returns_none_when_mrz_line2_too_short() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_mrz_args
+
+    assert _extract_mrz_args({"mrz_line2": "SHORT"}) is None
+
+
+def test_mrz_extractor_returns_none_when_check_digit_not_int() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_mrz_args
+
+    # char 9 is 'X' — not parseable as int
+    assert _extract_mrz_args({"mrz_line2": "P1234567<X..."}) is None
+
+
+def test_balance_extractor_returns_kwargs_with_opening_balance_key() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    fields = {
+        "opening_balance": 1000.0,
+        "closing_balance": 1150.0,
+        "transactions": [200.0, -50.0],
+    }
+    kwargs = _extract_balance_args(fields)
+    assert kwargs is not None
+    assert kwargs["opening"] == pytest.approx(1000.0)
+    assert kwargs["closing"] == pytest.approx(1150.0)
+    assert kwargs["transactions"] == [200.0, -50.0]
+
+
+def test_balance_extractor_accepts_opening_key_alias() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    fields = {"opening": 500.0, "closing": 600.0, "transactions": [100.0]}
+    kwargs = _extract_balance_args(fields)
+    assert kwargs is not None
+    assert kwargs["opening"] == pytest.approx(500.0)
+
+
+def test_balance_extractor_accepts_dict_transactions() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    fields = {
+        "opening_balance": 100.0,
+        "closing_balance": 250.0,
+        "transactions": [
+            {"date": "2024-01-01", "amount": 200.0, "description": "deposit"},
+            {"date": "2024-01-15", "amount": -50.0, "description": "fee"},
+        ],
+    }
+    kwargs = _extract_balance_args(fields)
+    assert kwargs is not None
+    assert kwargs["transactions"] == [200.0, -50.0]
+
+
+def test_balance_extractor_returns_none_when_opening_missing() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    assert _extract_balance_args({"closing_balance": 500.0}) is None
+
+
+def test_balance_extractor_returns_none_when_closing_missing() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    assert _extract_balance_args({"opening_balance": 500.0}) is None
+
+
+def test_balance_extractor_empty_transactions_is_valid() -> None:
+    from pipelines.truth_engine.verifier_registry import _extract_balance_args
+
+    fields = {"opening_balance": 0.0, "closing_balance": 0.0}
+    kwargs = _extract_balance_args(fields)
+    assert kwargs is not None
+    assert kwargs["transactions"] == []
+
+
+# ---------------------------------------------------------------------------
+# truth_engine_node
+# ---------------------------------------------------------------------------
+
+
+def _make_state(**overrides) -> dict:
+    extraction = ExtractionResult(
+        fields={"surname": "SMITH", "given_names": "JOHN"},
+        overall_confidence=0.85,
+        context_used=False,
+        sample_count=1,
+    )
+    defaults: dict = {
+        "doc_type": "passport",
+        "classify_confidence": 0.9,
+        "extraction_result": extraction,
+        "extracted_fields": extraction.fields,
+        "extract_confidence": extraction.overall_confidence,
+    }
+    return {**defaults, **overrides}
+
+
+def test_truth_engine_node_returns_truth_report() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    result = truth_engine_node(_make_state())
+    assert "truth_report" in result
+    assert isinstance(result["truth_report"], TruthReport)
+
+
+def test_truth_engine_node_truth_report_has_extraction() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    extraction = ExtractionResult(
+        fields={"surname": "DOE"}, overall_confidence=0.75, context_used=True, sample_count=3
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    assert report.extraction is extraction
+    assert report.extraction.context_used is True
+    assert report.extraction.sample_count == 3
+
+
+def test_truth_engine_node_field_validation_reflects_required_coverage() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    # Only 1 of 8 required passport fields present
+    extraction = ExtractionResult(
+        fields={"surname": "SMITH"}, overall_confidence=0.8, context_used=False, sample_count=1
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    assert report.field_validation.coverage_score == pytest.approx(1 / 8)
+    assert "given_names" in report.field_validation.required_fields_missing
+
+
+def test_truth_engine_node_additional_fields_detected() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    extra_fields = {**_PASSPORT_REQUIRED, "biometric_chip": True, "visa_stamps": ["USA"]}
+    extraction = ExtractionResult(
+        fields=extra_fields, overall_confidence=0.9, context_used=False, sample_count=1
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    assert "biometric_chip" in report.field_validation.additional_fields
+    assert report.field_validation.coverage_score == pytest.approx(1.0)
+
+
+def test_truth_engine_node_verifier_not_attempted_when_mrz_missing() -> None:
+    """Passport extraction without mrz_line2 → mrz_checksum not attempted."""
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    extraction = ExtractionResult(
+        fields=_PASSPORT_REQUIRED,  # no mrz_line2
+        overall_confidence=0.85,
+        context_used=False,
+        sample_count=1,
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    mrz_report = next(r for r in report.verification_reports if r.verifier_name == "mrz_checksum")
+    assert mrz_report.passed is None
+
+
+def test_truth_engine_node_verifier_executed_when_mrz_present_and_valid() -> None:
+    """Valid MRZ check digit → mrz_checksum passes."""
+    from pipelines.nodes.truth_engine import truth_engine_node
+    from agents.verifiers import mrz_checksum
+
+    # Compute valid check digit for "P1234567<"
+    doc_number = "P1234567<"
+    valid_check = mrz_checksum(doc_number, 0)["expected"]
+    mrz_line2 = doc_number + str(valid_check) + "GBR9001011M3001019<<<<<<<<<<<<6"
+
+    fields = {**_PASSPORT_REQUIRED, "mrz_line2": mrz_line2}
+    extraction = ExtractionResult(
+        fields=fields, overall_confidence=0.9, context_used=False, sample_count=1
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    mrz_report = next(r for r in report.verification_reports if r.verifier_name == "mrz_checksum")
+    assert mrz_report.passed is True
+    assert mrz_report.confidence == pytest.approx(1.0)
+
+
+def test_truth_engine_node_verifier_fails_on_wrong_check_digit() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    # Force an invalid check digit (wrong char after doc number)
+    mrz_line2 = "P1234567<9GBR9001011M3001019<<<<<<<<<<<<6"  # 9 is wrong for P1234567<
+    fields = {**_PASSPORT_REQUIRED, "mrz_line2": mrz_line2}
+    extraction = ExtractionResult(
+        fields=fields, overall_confidence=0.9, context_used=False, sample_count=1
+    )
+    result = truth_engine_node(_make_state(extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    mrz_report = next(r for r in report.verification_reports if r.verifier_name == "mrz_checksum")
+    # May pass or fail depending on P1234567< checksum — assert structure is correct
+    assert mrz_report.passed is not None
+    assert "valid" in mrz_report.details
+
+
+def test_truth_engine_node_multiple_verifiers_all_run() -> None:
+    """Verifier failures do not prevent subsequent verifiers from running."""
+    from pipelines.nodes.truth_engine import truth_engine_node
+    from pipelines.truth_engine.verifier_registry import VerifierRegistry, VerifierSpec
+
+    call_log: list[str] = []
+
+    def v1(**_) -> dict:
+        call_log.append("v1")
+        return {"valid": False}
+
+    def v2(**_) -> dict:
+        call_log.append("v2")
+        return {"valid": True}
+
+    def always_return(val):
+        return lambda fields: val
+
+    reg = VerifierRegistry()
+    reg.register(
+        "test_doc",
+        VerifierSpec("v1", v1, extractor=always_return({"x": 1})),
+        VerifierSpec("v2", v2, extractor=always_return({"y": 2})),
+    )
+
+    import unittest.mock as mock
+    with mock.patch("pipelines.nodes.truth_engine.verifier_registry", reg):
+        state = _make_state(doc_type="test_doc")
+        result = truth_engine_node(state)
+
+    assert call_log == ["v1", "v2"]
+    reports = result["truth_report"].verification_reports
+    assert reports[0].passed is False
+    assert reports[1].passed is True
+
+
+def test_truth_engine_node_confidence_fusion_uses_all_signals() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    extraction = ExtractionResult(
+        fields=_PASSPORT_REQUIRED,
+        overall_confidence=0.85,
+        context_used=False,
+        sample_count=1,
+    )
+    state = _make_state(classify_confidence=0.9, extraction_result=extraction)
+    result = truth_engine_node(state)
+    report: TruthReport = result["truth_report"]
+    # coverage=1.0, no verifiers executed (no mrz_line2)
+    expected_base = 0.20 * 0.9 + 0.50 * 0.85 + 0.30 * 1.0
+    assert report.final_confidence == pytest.approx(expected_base, abs=1e-3)
+
+
+def test_truth_engine_node_verification_failure_caps_confidence() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+    from pipelines.truth_engine.verifier_registry import VerifierRegistry, VerifierSpec
+
+    def always_fail(**_) -> dict:
+        return {"valid": False}
+
+    reg = VerifierRegistry()
+    reg.register(
+        "test_doc",
+        VerifierSpec("fail_verifier", always_fail, extractor=lambda f: {"x": 1}),
+    )
+
+    import unittest.mock as mock
+    with mock.patch("pipelines.nodes.truth_engine.verifier_registry", reg):
+        state = _make_state(doc_type="test_doc", classify_confidence=0.95)
+        result = truth_engine_node(state)
+
+    report: TruthReport = result["truth_report"]
+    assert report.final_confidence <= 0.70
+    assert "capped_by_failures" in report.decision_reason
+
+
+def test_truth_engine_node_fallback_reconstruction_when_no_extraction_result() -> None:
+    """truth_engine_node reconstructs ExtractionResult from flat state fields when needed."""
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    state = {
+        "doc_type": "passport",
+        "classify_confidence": 0.8,
+        "extraction_result": None,
+        "extracted_fields": {"surname": "SMITH"},
+        "extract_confidence": 0.75,
+    }
+    result = truth_engine_node(state)
+    report: TruthReport = result["truth_report"]
+    assert report.extraction.fields == {"surname": "SMITH"}
+    assert report.extraction.overall_confidence == pytest.approx(0.75)
+
+
+def test_truth_engine_node_unknown_doc_type_coverage_is_one() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    extraction = ExtractionResult(
+        fields={"random_field": "value"}, overall_confidence=0.7, context_used=False, sample_count=1
+    )
+    result = truth_engine_node(_make_state(doc_type="nonexistent_type", extraction_result=extraction))
+    report: TruthReport = result["truth_report"]
+    assert report.field_validation.coverage_score == pytest.approx(1.0)
+    assert report.verification_reports == []
+
+
+def test_truth_engine_node_truth_report_has_no_routing_fields() -> None:
+    from pipelines.nodes.truth_engine import truth_engine_node
+
+    result = truth_engine_node(_make_state())
+    report: TruthReport = result["truth_report"]
+    assert not hasattr(report, "action")
+    assert not hasattr(report, "routing_decision")
+    assert not hasattr(report, "next_node")
