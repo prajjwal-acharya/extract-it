@@ -17,7 +17,7 @@ designed that way.
 7. [RAG and the Vector Store](#7-rag-and-the-vector-store)
 8. [Knowledge Graph and Retrieval Logging](#8-knowledge-graph-and-retrieval-logging)
 9. [REST API](#9-rest-api)
-10. [Streamlit UI](#10-streamlit-ui)
+10. [Streamlit Dashboard](#10-streamlit-dashboard)
 11. [Data Model](#11-data-model)
 12. [Configuration and Adapters](#12-configuration-and-adapters)
 13. [Observability](#13-observability)
@@ -90,11 +90,16 @@ designed that way.
   ┌───────────────────────────────────────────────────────┐
   │  FastAPI  (api/)                                      │
   │  POST /ingest/                                        │
-  │  GET  /documents/          GET /documents/{id}        │
+  │  GET  /documents/          GET  /documents/{id}       │
   │  GET  /documents/{id}/references                      │
+  │  GET  /documents/{id}/similar                         │
+  │  GET  /documents/{id}/timeline                        │
+  │  GET  /documents/{id}/explain                         │
+  │  POST /search/             GET  /analytics/           │
   │  GET  /knowledge-graph/                               │
-  │  GET  /review/pending                                 │
-  │  POST /review/{id}/decision                           │
+  │  GET  /review/pending      POST /review/{id}/decision │
+  │  GET  /schema-proposals/pending                       │
+  │  POST /schema-proposals/{id}/approve|reject           │
   │  POST /query/                                         │
   └──────────────────────┬────────────────────────────────┘
                          │
@@ -474,9 +479,11 @@ After a document completes successfully, `write_output()` embeds the full
 `extracted_fields` JSON string using `gemini-embedding-001` (768 dimensions)
 and upserts into `document_embeddings`.
 
-HITL-corrected documents also get re-embedded: when `POST /review/{id}/decision`
-receives `approved=True` with corrections, the merged fields are embedded with
-`source="hitl_correction"`, creating higher-quality exemplars for future retrieval.
+HITL-corrected documents also get re-embedded: after `POST /review/{id}/decision`
+resumes the pipeline, `write_output` evaluates `LearningPolicy` and — if
+`learn_from_correction=True` — embeds the merged fields with `source="hitl_correction"`,
+creating higher-quality exemplars for future retrieval. `review.py` does not embed
+directly; `LearningPolicy` in `write_output` is the sole embedding authority.
 
 ### Retrieval at extraction time
 
@@ -528,62 +535,95 @@ to `similarity_score`.
 
 ## 9. REST API
 
-Base URL: `http://localhost:8000`
+Base URL: `http://localhost:8000`  
+Interactive docs: `http://localhost:8000/docs`
+
+### Core endpoints
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness probe |
-| `POST` | `/ingest/` | — | Upload a document; triggers pipeline async |
-| `GET` | `/documents/` | — | List documents; filter by `status`, `doc_type`; paginate with `limit`/`offset` |
-| `GET` | `/documents/{id}` | — | Full detail: `extracted_fields`, `universal_schema`, `confidence_logs` |
-| `GET` | `/documents/{id}/references` | — | `retrieval_logs` for this document joined to referenced doc metadata |
+| `POST` | `/ingest/` | — | Upload a document; pipeline runs as BackgroundTask |
+| `GET` | `/documents/` | — | List documents; filter: `status`, `doc_type`; paginate: `limit`, `offset` |
+| `GET` | `/documents/{id}` | — | Canonical explorer: extracted fields, truth report, resolution decision, learning decision, persistence audit, confidence logs, retrieval history |
+| `GET` | `/documents/{id}/references` | — | `retrieval_logs` rows for this document joined to referenced doc metadata |
 | `GET` | `/knowledge-graph/` | — | Node/edge payload for the most recent `limit` documents |
-| `GET` | `/review/pending` | — | Documents in `current_phase=awaiting_review` with retry references |
-| `POST` | `/review/{id}/decision` | `X-API-Key` (optional) | Resume HITL: `{approved: bool, corrections: dict}` |
 | `POST` | `/query/` | — | Semantic Q&A: `{question: str}` → `{answer, sources}` |
 
-**API key guard**: `POST /review/{id}/decision` checks `X-API-Key` header against
-`REVIEW_API_KEY` env var. If the env var is unset the route is open (dev mode).
+### Query & Explainability (read-only)
 
-Interactive docs: `http://localhost:8000/docs`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/search/` | — | Semantic search: `{query, doc_type?, top_k}` → ranked results with similarity score and 300-char excerpt |
+| `GET` | `/documents/{id}/similar` | — | Top-k documents nearest to this doc's embedding (pgvector cosine) |
+| `GET` | `/documents/{id}/timeline` | — | Ordered pipeline events: agent, timestamp, confidence, duration_ms, retry labeling, HITL injection |
+| `GET` | `/documents/{id}/explain` | — | Human-readable: verdict, verifier pass/fail, field coverage, learning action |
+| `GET` | `/analytics/` | — | Aggregate metrics: document counts by status, acceptance/HITL/retry rates, strategy usage, verifier failures, avg confidence by agent |
+
+### HITL & Schema Approval
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/review/pending` | — | Documents in `awaiting_review` with confidence logs and retrieval context |
+| `POST` | `/review/{id}/decision` | `X-API-Key` | Resume pipeline: `{approved: bool, corrections: dict}` |
+| `GET` | `/schema-proposals/pending` | — | Schema proposals with status `pending` |
+| `POST` | `/schema-proposals/{id}/approve` | `X-API-Key` | Activate proposal → inserts new `SchemaVersion`, sets proposal status `approved` |
+| `POST` | `/schema-proposals/{id}/reject` | `X-API-Key` | Store rejection reason; proposal status → `rejected` (auditable, never deleted) |
+
+**API key guard**: routes marked `X-API-Key` check the header against `REVIEW_API_KEY` env var.
+If the env var is unset the route is open (dev mode).
 
 ---
 
-## 10. Streamlit UI
+## 10. Streamlit Dashboard
 
-`frontend/review_app.py` — five sidebar panels:
+`frontend/app.py` is the multipage entry point. Pages live in `frontend/pages/`.
+All HTTP calls go through `frontend/api_client.py` — no page imports `requests` directly.
 
-### Ingest
-File uploader → `POST /ingest/` → displays returned `document_id`.
+`API_BASE_URL` (default `http://localhost:8000`) controls which API the dashboard talks to.
+In Docker it is set to `http://app:8000` via `docker-compose.yml`.
 
-### Documents
-- Table (`st.dataframe`) from `GET /documents/` with `status` / `doc_type` filters
-  and a manual Refresh button
-- Document selector → `GET /documents/{id}`:
-  - `current_phase` badge + `status` badge
-  - Confidence metrics per agent (classify, extract, validate, verify)
-  - Expandable `extracted_fields` JSON (full doc-type field set, not just 3 universal keys)
-  - Expandable `universal_schema` JSON
-  - Expandable references table from `GET /documents/{id}/references`
+### Page inventory
 
-### Knowledge Map
-- `GET /knowledge-graph/?limit=N`
-- `streamlit_agraph` force-directed graph
-- Nodes colored by `doc_type`; edge width / opacity by `similarity_score`
-- Empty graph is correct when no retries have occurred (edges only exist when
-  a document's RAG retrieval matched a prior document)
+| File | Title | Key API calls |
+|---|---|---|
+| `app.py` | Upload | `POST /ingest/` → live status polling via `GET /documents/{id}` |
+| `pages/1_📋_Documents.py` | Documents | `GET /documents/`, `GET /documents/{id}`, `GET /documents/{id}/timeline`, `GET /documents/{id}/explain`, `GET /documents/{id}/similar` |
+| `pages/2_🔍_Search.py` | Semantic Search | `POST /search/` |
+| `pages/3_✅_Review_Queue.py` | Review Queue | `GET /review/pending`, `POST /review/{id}/decision` |
+| `pages/4_🏛_Schema_Proposals.py` | Schema Proposals | `GET /schema-proposals/pending`, `POST /schema-proposals/{id}/approve|reject` |
+| `pages/5_📊_Analytics.py` | Analytics | `GET /analytics/` |
+| `pages/6_🗺_Knowledge_Map.py` | Knowledge Map | `GET /knowledge-graph/` → `streamlit-agraph` force-directed graph |
 
-### HITL Queue
-- `GET /review/pending` — lists documents in `awaiting_review`
-- Selecting a document shows:
-  - Extracted fields JSON
-  - Confidence scores
-  - "Similar docs used during retry" (stage=`retry` references)
-- Approve / Reject form + optional corrections JSON → `POST /review/{id}/decision`
+### Design constraints
 
-### Query
-- Text input → `POST /query/` → answer + source document IDs
-- Gracefully degrades if query service is unavailable
+- All business logic stays in the API — the dashboard is a pure presentation layer.
+- No duplicate DB queries: every data fetch goes through `api_client.client`.
+- Graceful degradation: `ApiError` is caught per-page and rendered as `st.error()`,
+  never surfaced as an unhandled exception.
+- Dark theme via `frontend/.streamlit/config.toml`.
+
+### Running the dashboard
+
+In Docker (automatic):
+```
+make up   # frontend service starts on port 8501
+```
+
+Locally against a running API:
+```bash
+make dashboard
+# → API_BASE_URL=http://localhost:8000 streamlit run frontend/app.py
+```
+
+### Tests
+
+`frontend/tests/test_smoke.py` — headless `AppTest` smoke tests for all 7 pages
+(API mocked via `mock.patch("api_client.client", ...)`) plus `ApiClient` unit tests.
+
+```bash
+make test-smoke
+```
 
 ---
 
@@ -606,22 +646,36 @@ File uploader → `POST /ingest/` → displays returned `document_id`.
 
 **`current_phase` values** (in order):
 `pending → ingested → classifying → extracting → validating → retrying →
-awaiting_review → normalizing → finalizing → completed | rejected | failed`
+awaiting_review → normalizing → finalizing → completed | rejected | failed | persist_failed`
+
+`persist_failed` is a terminal state set when the atomic 4-phase persist succeeds
+through Phase A (DB audit) but fails in Phase B (object store), Phase C (embedding),
+or Phase D (terminal status commit). The document's data is safe in Postgres but the
+pipeline did not reach a clean terminal state.
 
 ### `confidence_logs`
 
-One row per agent per document. `agent` ∈ `{classify, extract, validate, verify, schema_diff}`.
+One row per agent per document.
+`agent` ∈ `{classify, extract, validate, verify, schema_diff, persist}`.
+
+The `persist` agent writes `score=1.0` on clean completion and `score=0.0` on
+`persist_failed`, making persistence failures visible in the confidence timeline.
 
 ### `document_embeddings`
 
-768-dim pgvector column. One row per chunk (chunk_index 0 = full extracted_fields
-JSON). `source` is `NULL` for pipeline-generated embeddings, `"hitl_correction"`
-for HITL-corrected re-embeds.
+768-dim pgvector column. One row per chunk (chunk_index 0 = full extracted_fields JSON).
+
+| `source` value | When written |
+|---|---|
+| `"document"` | Pipeline auto-embed via LearningPolicy (learn_from_document=True) |
+| `"hitl_correction"` | HITL correction path (learn_from_correction=True) |
+
+`LearningPolicy` (in `output_writer.py`) is the sole authority that decides whether and how
+to embed. No other code path writes embeddings directly.
 
 ### `retrieval_logs`
 
-Records every RAG retrieval event — which document used which other document as
-context during extraction:
+Records every RAG retrieval event — which document used which other document as context:
 
 | Column | Notes |
 |---|---|
@@ -635,10 +689,34 @@ context during extraction:
 Versioned schemas. Only one row per `doc_type` has `is_active=TRUE` (enforced by
 partial unique index). `source` ∈ `{reference, auto_discovered}`.
 
+### `persistence_audit_logs`
+
+One row per pipeline run. Snapshot of the decisions made at the end of the pipeline:
+
+| Column | Notes |
+|---|---|
+| `resolution_strategy` | `accept`, `retry`, `hitl`, etc. |
+| `resolution_requires_human` | whether the run was escalated to HITL |
+| `learning_candidate` / `allow_learning` | LearningPolicy output |
+| `learn_from_document` / `learn_from_correction` | which embed path was taken |
+| `schema_candidate` / `schema_proposal_json` | whether a schema change was proposed |
+| `persist_status` | terminal status written to the document |
+| `persist_reason` | error message if `persist_failed` |
+
+### `schema_proposal_records`
+
+Human-gated schema changes. Created by `write_output` when `learning_decision.schema_candidate=True`.
+
+| `status` | Transition |
+|---|---|
+| `pending` | initial state; visible in `GET /schema-proposals/pending` |
+| `approved` | `POST /schema-proposals/{id}/approve` → new `SchemaVersion` activated |
+| `rejected` | `POST /schema-proposals/{id}/reject` → `rejection_reason` stored; row never deleted |
+
 ### LangGraph checkpoint tables
 
-Created by `PostgresSaver.setup()` outside of Alembic. Store serialised
-`GraphState` snapshots for interrupt/resume and crash recovery.
+Created by `PostgresSaver.setup()` (via `make checkpointer`) outside of Alembic.
+Stores serialised `GraphState` snapshots for interrupt/resume and crash recovery.
 
 ---
 
