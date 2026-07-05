@@ -79,7 +79,7 @@ for i, r in enumerate(results):
         source_color = "🟡" if source == "hitl_correction" else "🔵"
         col_badge.markdown(f"{source_color}  \n`{source}`")
 
-        if st.button(f"Open details →", key=f"open_{r['document_id']}"):
+        if st.button("Open details →", key=f"open_{r['document_id']}"):
             st.session_state["selected_doc_id"] = r["document_id"]
             st.switch_page("pages/1_📋_Documents.py")
 

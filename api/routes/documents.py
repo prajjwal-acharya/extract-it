@@ -6,7 +6,6 @@ Artifacts are read directly from the DB tables written by previous phases.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
@@ -401,7 +400,6 @@ def explain_document(document_id: str, session: Session = Depends(get_db)) -> di
     confidence_final = None
     verifiers_passed: list[str] = []
     verifiers_failed: list[str] = []
-    fields_present: list[str] = []
     fields_missing: list[str] = []
     fields_additional: list[str] = []
     truth_reason = None

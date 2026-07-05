@@ -9,7 +9,6 @@ API calls are mocked at the requests level so no real backend is needed.
 from __future__ import annotations
 
 import sys
-import os
 import unittest.mock as mock
 from pathlib import Path
 
@@ -19,7 +18,7 @@ import pytest
 FRONTEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(FRONTEND_DIR))
 
-from streamlit.testing.v1 import AppTest
+from streamlit.testing.v1 import AppTest  # noqa: E402
 
 
 def _pages_dir() -> Path:
@@ -286,7 +285,6 @@ class TestKnowledgeMapPage:
 class TestApiClient:
     def test_client_get_raises_api_error_on_connection_failure(self) -> None:
         from api_client import ApiClient, ApiError
-        import requests
 
         c = ApiClient(base_url="http://localhost:19999")
         with pytest.raises(ApiError):

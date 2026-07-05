@@ -3,7 +3,7 @@ from __future__ import annotations
 from config.settings import settings
 from pipelines.resolution.models import ExecutionRecord, PlannerBundle, ResolutionDecision, RetryPlan, Strategy
 from pipelines.resolution.prompt_refinement import failure_variant
-from pipelines.truth_engine.models import TruthReport, VerificationReport
+from pipelines.truth_engine.models import TruthReport
 
 
 # Autonomous strategies tried in order before falling back to generic RETRY.

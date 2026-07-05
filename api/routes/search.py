@@ -6,13 +6,13 @@ No inference — read-only.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from agents.llm_client import embed
 from api.deps import get_db
-from db.models import Document, DocumentEmbedding
+from db.models import Document
 from db.vector_store import similarity_search
 
 router = APIRouter()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pipelines.truth_engine.models import EvidenceBundle, VerificationReport
+from pipelines.truth_engine.models import EvidenceBundle
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ Read-only. No inference. No planner changes.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
