@@ -67,7 +67,9 @@ def extract(
     model_override uses a higher-tier model (MODEL_ESCALATION) for this pass only.
     Deterministic verification is NOT performed here — Phase 4 owns that.
     """
-    first = _extract_once(content, mime_type, doc_type, context, additional_instructions, model_override)
+    first = _extract_once(
+        content, mime_type, doc_type, context, additional_instructions, model_override
+    )
 
     if not first.success:
         return ExtractionResult(
@@ -90,7 +92,9 @@ def extract(
         )
 
     samples = [first] + [
-        _extract_once(content, mime_type, doc_type, context, additional_instructions, model_override)
+        _extract_once(
+            content, mime_type, doc_type, context, additional_instructions, model_override
+        )
         for _ in range(2)
     ]
     voted = vote(samples)

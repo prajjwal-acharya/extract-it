@@ -12,6 +12,7 @@ place and shared with BETTER_RETRIEVAL and IMAGE_PREPROCESS.
 failure_variant() is shared with ResolutionPlanner so both components agree
 on what constitutes "the same failure pattern" for deduplication purposes.
 """
+
 from __future__ import annotations
 
 from pipelines.resolution.directives import Directive, DirectiveEngine, _FIELD_DIRECTIVES
@@ -112,6 +113,7 @@ _VERIFIER_HINTS: dict[str, str] = {
 # Shared variant computation — imported by both planner and PromptRefinementStrategy
 # ---------------------------------------------------------------------------
 
+
 def failure_variant(truth_report: TruthReport, coverage_threshold: float = 0.80) -> str:
     """Compute a canonical slug identifying the failure pattern.
 
@@ -141,6 +143,7 @@ def failure_variant(truth_report: TruthReport, coverage_threshold: float = 0.80)
 # Strategy
 # ---------------------------------------------------------------------------
 
+
 class PromptRefinementStrategy:
     """Generates a RefinedPrompt from TruthReport evidence via DirectiveEngine.
 
@@ -167,22 +170,16 @@ class PromptRefinementStrategy:
 
         # Append specific verifier names so the model knows which checks failed
         failed_verifiers = [
-            r.verifier_name
-            for r in truth_report.verification_reports
-            if r.passed is False
+            r.verifier_name for r in truth_report.verification_reports if r.passed is False
         ]
         if failed_verifiers:
-            parts.append(
-                f"Specifically re-check fields for: {', '.join(failed_verifiers)}."
-            )
+            parts.append(f"Specifically re-check fields for: {', '.join(failed_verifiers)}.")
 
         # Append field names for required fields NOT covered by a known directive
         missing = truth_report.field_validation.required_fields_missing
         uncovered = [f for f in missing if f not in _FIELD_DIRECTIVES]
         if uncovered:
-            parts.append(
-                f"Also search all document sections for: {', '.join(uncovered)}."
-            )
+            parts.append(f"Also search all document sections for: {', '.join(uncovered)}.")
 
         instructions = "\n".join(parts)
         reason = self._reason_from_directives(directives, truth_report)
@@ -197,15 +194,11 @@ class PromptRefinementStrategy:
     # ------------------------------------------------------------------ private
 
     @staticmethod
-    def _reason_from_directives(
-        directives: list[Directive], truth_report: TruthReport
-    ) -> str:
+    def _reason_from_directives(directives: list[Directive], truth_report: TruthReport) -> str:
         """Build a concise human-readable reason from the directives selected."""
         if any(d == Directive.RECHECK_EXTRACTION for d in directives):
             failed = [
-                r.verifier_name
-                for r in truth_report.verification_reports
-                if r.passed is False
+                r.verifier_name for r in truth_report.verification_reports if r.passed is False
             ]
             return f"Deterministic verification failed: {failed}."
         missing = truth_report.field_validation.required_fields_missing

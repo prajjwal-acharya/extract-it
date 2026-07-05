@@ -216,7 +216,9 @@ class PersistenceAuditLog(Base):
     schema_proposal_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Persist outcome
-    persist_status: Mapped[str] = mapped_column(String, nullable=False)  # completed | persist_failed
+    persist_status: Mapped[str] = mapped_column(
+        String, nullable=False
+    )  # completed | persist_failed
     persist_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

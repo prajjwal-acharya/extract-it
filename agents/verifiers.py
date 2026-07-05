@@ -3,6 +3,7 @@
 Every function returns {"valid": bool, ...}. Failures are non-fatal — the
 Truth Engine collects all reports and factors them into final_confidence.
 """
+
 from __future__ import annotations
 
 import re
@@ -48,9 +49,7 @@ def mrz_checksum(mrz_string: str, check_digit: int) -> dict:
 
     Returns {"valid": bool, "expected": int, "got": int}.
     """
-    total = sum(
-        _MRZ_WEIGHTS[i % 3] * _MRZ_CHAR_VALUES.get(c, 0) for i, c in enumerate(mrz_string)
-    )
+    total = sum(_MRZ_WEIGHTS[i % 3] * _MRZ_CHAR_VALUES.get(c, 0) for i, c in enumerate(mrz_string))
     expected = total % 10
     return {"valid": expected == check_digit, "expected": expected, "got": check_digit}
 

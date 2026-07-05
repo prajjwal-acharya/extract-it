@@ -3,6 +3,7 @@
 All endpoints are read-only.  No inference, no planner changes.
 Artifacts are read directly from the DB tables written by previous phases.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -168,14 +169,16 @@ def get_document(document_id: str, session: Session = Depends(get_db)) -> dict:
     retrieval_history = []
     for rl in retrieval:
         ref_doc = session.get(Document, rl.retrieved_document_id)
-        retrieval_history.append({
-            "retrieved_document_id": rl.retrieved_document_id,
-            "filename": ref_doc.filename if ref_doc else None,
-            "doc_type": ref_doc.doc_type if ref_doc else None,
-            "stage": rl.stage,
-            "similarity_score": rl.similarity_score,
-            "created_at": _fmt_ts(rl.created_at),
-        })
+        retrieval_history.append(
+            {
+                "retrieved_document_id": rl.retrieved_document_id,
+                "filename": ref_doc.filename if ref_doc else None,
+                "doc_type": ref_doc.doc_type if ref_doc else None,
+                "stage": rl.stage,
+                "similarity_score": rl.similarity_score,
+                "created_at": _fmt_ts(rl.created_at),
+            }
+        )
 
     return {
         "id": doc.id,
@@ -216,14 +219,16 @@ def get_document_references(document_id: str, session: Session = Depends(get_db)
     result = []
     for log in logs:
         ref_doc = session.get(Document, log.retrieved_document_id)
-        result.append({
-            "retrieved_document_id": log.retrieved_document_id,
-            "filename": ref_doc.filename if ref_doc else None,
-            "doc_type": ref_doc.doc_type if ref_doc else None,
-            "stage": log.stage,
-            "similarity_score": log.similarity_score,
-            "created_at": _fmt_ts(log.created_at),
-        })
+        result.append(
+            {
+                "retrieved_document_id": log.retrieved_document_id,
+                "filename": ref_doc.filename if ref_doc else None,
+                "doc_type": ref_doc.doc_type if ref_doc else None,
+                "stage": log.stage,
+                "similarity_score": log.similarity_score,
+                "created_at": _fmt_ts(log.created_at),
+            }
+        )
     return result
 
 
@@ -242,9 +247,7 @@ def get_similar_documents(
     _doc_or_404(document_id, session)
 
     emb_row = (
-        session.query(DocumentEmbedding)
-        .filter_by(document_id=document_id, chunk_index=0)
-        .first()
+        session.query(DocumentEmbedding).filter_by(document_id=document_id, chunk_index=0).first()
     )
     if emb_row is None or emb_row.embedding is None:
         return []
@@ -258,15 +261,17 @@ def get_similar_documents(
         ref_doc = session.get(Document, row.document_id)
         if ref_doc is None:
             continue
-        output.append({
-            "document_id": row.document_id,
-            "filename": ref_doc.filename,
-            "doc_type": ref_doc.doc_type,
-            "status": ref_doc.status,
-            "similarity_score": round(1.0 - float(distance), 4),
-            "embedding_source": row.source,
-            "created_at": _fmt_ts(ref_doc.created_at),
-        })
+        output.append(
+            {
+                "document_id": row.document_id,
+                "filename": ref_doc.filename,
+                "doc_type": ref_doc.doc_type,
+                "status": ref_doc.status,
+                "similarity_score": round(1.0 - float(distance), 4),
+                "embedding_source": row.source,
+                "created_at": _fmt_ts(ref_doc.created_at),
+            }
+        )
         if len(output) >= top_k:
             break
 
@@ -295,15 +300,17 @@ def _build_timeline(
 ) -> list[dict]:
     events: list[dict] = []
 
-    events.append({
-        "event": "upload",
-        "timestamp": _fmt_ts(doc.created_at),
-        "confidence": None,
-        "reason": None,
-        "strategy": None,
-        "model": None,
-        "duration_ms": None,
-    })
+    events.append(
+        {
+            "event": "upload",
+            "timestamp": _fmt_ts(doc.created_at),
+            "confidence": None,
+            "reason": None,
+            "strategy": None,
+            "model": None,
+            "duration_ms": None,
+        }
+    )
 
     # Track per-agent occurrence index to label retries
     agent_counts: dict[str, int] = {}
@@ -327,15 +334,17 @@ def _build_timeline(
             duration_ms = round(delta * 1000)
         prev_ts = cl.created_at
 
-        events.append({
-            "event": event_name,
-            "timestamp": _fmt_ts(cl.created_at),
-            "confidence": cl.score,
-            "reason": cl.reason,
-            "strategy": strategy,
-            "model": None,
-            "duration_ms": duration_ms,
-        })
+        events.append(
+            {
+                "event": event_name,
+                "timestamp": _fmt_ts(cl.created_at),
+                "confidence": cl.score,
+                "reason": cl.reason,
+                "strategy": strategy,
+                "model": None,
+                "duration_ms": duration_ms,
+            }
+        )
 
     # Inject HITL event if document went through review
     if persist is not None and persist.resolution_requires_human:
@@ -356,15 +365,17 @@ def _build_timeline(
 
     # Inject retrieval events
     for rl in retrieval:
-        events.append({
-            "event": f"retrieval:{rl.stage}",
-            "timestamp": _fmt_ts(rl.created_at),
-            "confidence": rl.similarity_score,
-            "reason": f"retrieved {rl.retrieved_document_id}",
-            "strategy": None,
-            "model": None,
-            "duration_ms": None,
-        })
+        events.append(
+            {
+                "event": f"retrieval:{rl.stage}",
+                "timestamp": _fmt_ts(rl.created_at),
+                "confidence": rl.similarity_score,
+                "reason": f"retrieved {rl.retrieved_document_id}",
+                "strategy": None,
+                "model": None,
+                "duration_ms": None,
+            }
+        )
 
     events.sort(key=lambda e: e["timestamp"] or "")
     return events

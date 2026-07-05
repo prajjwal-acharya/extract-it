@@ -19,10 +19,10 @@ class Strategy(str, Enum):
     RETRY = "retry"
     HITL = "hitl"
     REJECT = "reject"
-    PROMPT_REFINEMENT = "prompt_refinement"    # Phase 5.3 — implemented
-    BETTER_RETRIEVAL = "better_retrieval"       # Phase 5.x — not yet implemented
-    IMAGE_PREPROCESS = "image_preprocess"       # Phase 5.x — not yet implemented
-    MODEL_ESCALATION = "model_escalation"       # Phase 5.x — not yet implemented
+    PROMPT_REFINEMENT = "prompt_refinement"  # Phase 5.3 — implemented
+    BETTER_RETRIEVAL = "better_retrieval"  # Phase 5.x — not yet implemented
+    IMAGE_PREPROCESS = "image_preprocess"  # Phase 5.x — not yet implemented
+    MODEL_ESCALATION = "model_escalation"  # Phase 5.x — not yet implemented
 
 
 @dataclass
@@ -35,10 +35,10 @@ class RefinedPrompt:
     refinement attempts for the same failure pattern.
     """
 
-    additional_instructions: str   # text appended after the base prompt
-    refinement_reason: str         # why this refinement was generated (audit)
-    prompt_variant: str            # canonical slug for dedup (e.g. "missing_fields:X,Y")
-    target_fields: list[str]       # fields the refinement focuses on
+    additional_instructions: str  # text appended after the base prompt
+    refinement_reason: str  # why this refinement was generated (audit)
+    prompt_variant: str  # canonical slug for dedup (e.g. "missing_fields:X,Y")
+    target_fields: list[str]  # fields the refinement focuses on
 
 
 @dataclass
@@ -56,8 +56,8 @@ class RetryPlan:
 
     attempt_number: int
     reason: str
-    retrieval_strategy: str              # "similarity_search" | "no_context"
-    prompt_strategy: str                 # "standard" | "refined"
+    retrieval_strategy: str  # "similarity_search" | "no_context"
+    prompt_strategy: str  # "standard" | "refined"
     refinement_reason: str | None = None
     prompt_variant: str | None = None
     refinement_history: list[str] = field(default_factory=list)
@@ -84,18 +84,18 @@ class ExecutionRecord:
     """
 
     strategy: Strategy
-    timestamp: str              # ISO 8601 UTC
-    outcome: str                # "accepted" | "retry_scheduled" | "refinement_scheduled" | ...
+    timestamp: str  # ISO 8601 UTC
+    outcome: str  # "accepted" | "retry_scheduled" | "refinement_scheduled" | ...
     confidence_before: float
-    confidence_after: float | None          # set only when outcome is final (ACCEPT)
+    confidence_after: float | None  # set only when outcome is final (ACCEPT)
     strategy_metadata: dict = field(default_factory=dict)
-    directives: list[str] = field(default_factory=list)   # Directive.value strings
-    model_used: str | None = None           # explicit model name when escalated
-    retrieval_count: int = 0                # RAG chunks retrieved
+    directives: list[str] = field(default_factory=list)  # Directive.value strings
+    model_used: str | None = None  # explicit model name when escalated
+    retrieval_count: int = 0  # RAG chunks retrieved
     preprocessing_steps: list[str] = field(default_factory=list)
     duration_ms: float | None = None
-    evidence_before: dict | None = None     # snapshot of key metrics at decision time
-    evidence_after: dict | None = None      # snapshot after execution (filled by next pass)
+    evidence_before: dict | None = None  # snapshot of key metrics at decision time
+    evidence_after: dict | None = None  # snapshot after execution (filled by next pass)
 
 
 @dataclass(frozen=True)
@@ -129,4 +129,4 @@ class ResolutionDecision:
     retry_plan: RetryPlan | None = None
     execution_history: list[ExecutionRecord] = field(default_factory=list)
     learning_candidate: bool = False
-    schema_proposal: dict | None = None   # future: schema discovery trigger
+    schema_proposal: dict | None = None  # future: schema discovery trigger

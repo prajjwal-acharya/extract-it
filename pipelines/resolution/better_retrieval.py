@@ -4,6 +4,7 @@ Builds targeted retrieval query strings from TruthReport evidence via directives
 rather than embedding raw extracted_fields JSON. The queries are stored in state
 and consumed by op_a_retry_node, which holds the existing DB session logic.
 """
+
 from __future__ import annotations
 
 from pipelines.resolution.directives import Directive, DirectiveEngine
@@ -42,9 +43,7 @@ class BetterRetrievalStrategy:
             "query_count": len(queries),
             "missing_fields": truth_report.field_validation.required_fields_missing,
             "failed_verifiers": [
-                r.verifier_name
-                for r in truth_report.verification_reports
-                if r.passed is False
+                r.verifier_name for r in truth_report.verification_reports if r.passed is False
             ],
         }
         return queries, directives, metadata

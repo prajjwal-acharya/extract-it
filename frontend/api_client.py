@@ -4,6 +4,7 @@ All dashboard pages import this module — no direct requests calls in page code
 Base URL and API key come from environment variables so the dashboard works
 both locally (against localhost:8000) and in Docker (against app:8000).
 """
+
 from __future__ import annotations
 
 import os
@@ -32,11 +33,15 @@ class ApiClient:
 
     def _get(self, path: str, params: dict | None = None) -> Any:
         try:
-            r = requests.get(f"{self._base}{path}", params=params, headers=self._hdrs(), timeout=_TIMEOUT)
+            r = requests.get(
+                f"{self._base}{path}", params=params, headers=self._hdrs(), timeout=_TIMEOUT
+            )
             r.raise_for_status()
             return r.json()
         except requests.HTTPError as e:
-            raise ApiError(str(e), e.response.status_code if e.response is not None else None) from e
+            raise ApiError(
+                str(e), e.response.status_code if e.response is not None else None
+            ) from e
         except requests.RequestException as e:
             raise ApiError(str(e)) from e
 
@@ -52,7 +57,9 @@ class ApiClient:
             r.raise_for_status()
             return r.json()
         except requests.HTTPError as e:
-            raise ApiError(str(e), e.response.status_code if e.response is not None else None) from e
+            raise ApiError(
+                str(e), e.response.status_code if e.response is not None else None
+            ) from e
         except requests.RequestException as e:
             raise ApiError(str(e)) from e
 

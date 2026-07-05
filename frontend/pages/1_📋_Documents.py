@@ -1,4 +1,5 @@
 """Documents page — list, detail, timeline, explain, similar docs."""
+
 import sys
 import os
 
@@ -14,8 +15,16 @@ st.title("📋 Documents")
 
 # ── Filters ──────────────────────────────────────────────────────────────────
 
-STATUSES = ["", "completed", "failed", "rejected", "pending", "awaiting_review",
-            "persist_failed", "verification_failed"]
+STATUSES = [
+    "",
+    "completed",
+    "failed",
+    "rejected",
+    "pending",
+    "awaiting_review",
+    "persist_failed",
+    "verification_failed",
+]
 DOC_TYPES = ["", "passport", "bank_statement", "invoice", "id_card", "driving_license"]
 
 col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
@@ -44,14 +53,16 @@ if not docs:
 # Enrich table with confidence scores from logs
 rows = []
 for d in docs:
-    rows.append({
-        "id": d["id"],
-        "filename": d["filename"],
-        "doc_type": d.get("doc_type") or "—",
-        "status": d.get("status") or "—",
-        "current_phase": d.get("current_phase") or "—",
-        "created_at": d.get("created_at") or "—",
-    })
+    rows.append(
+        {
+            "id": d["id"],
+            "filename": d["filename"],
+            "doc_type": d.get("doc_type") or "—",
+            "status": d.get("status") or "—",
+            "current_phase": d.get("current_phase") or "—",
+            "created_at": d.get("created_at") or "—",
+        }
+    )
 
 df = pd.DataFrame(rows)
 st.dataframe(
@@ -144,7 +155,9 @@ with tab_overview:
                         )
 
                 if truth.get("required_fields_missing"):
-                    st.warning(f"Missing required fields: {', '.join(truth['required_fields_missing'])}")
+                    st.warning(
+                        f"Missing required fields: {', '.join(truth['required_fields_missing'])}"
+                    )
                 if truth.get("additional_fields"):
                     st.info(f"Additional fields found: {', '.join(truth['additional_fields'])}")
 
@@ -161,7 +174,9 @@ with tab_overview:
             with st.expander("Learning decision"):
                 cols = st.columns(2)
                 cols[0].metric("Allow learning", "Yes" if learning.get("allow_learning") else "No")
-                cols[1].metric("Schema candidate", "Yes" if learning.get("schema_candidate") else "No")
+                cols[1].metric(
+                    "Schema candidate", "Yes" if learning.get("schema_candidate") else "No"
+                )
                 st.caption(learning.get("reason") or "")
                 if learning.get("schema_proposal"):
                     st.json(learning["schema_proposal"])
@@ -206,15 +221,21 @@ with tab_timeline:
         for ev in timeline:
             name = ev.get("event", "")
             icon = next((v for k, v in _EVENT_COLORS.items() if name.startswith(k)), "⬛")
-            rows.append({
-                "": icon,
-                "Event": name,
-                "Timestamp": ev.get("timestamp") or "—",
-                "Confidence": f"{ev['confidence']:.3f}" if ev.get("confidence") is not None else "—",
-                "Duration ms": ev.get("duration_ms") if ev.get("duration_ms") is not None else "—",
-                "Strategy": ev.get("strategy") or "—",
-                "Reason": (ev.get("reason") or "")[:80],
-            })
+            rows.append(
+                {
+                    "": icon,
+                    "Event": name,
+                    "Timestamp": ev.get("timestamp") or "—",
+                    "Confidence": f"{ev['confidence']:.3f}"
+                    if ev.get("confidence") is not None
+                    else "—",
+                    "Duration ms": ev.get("duration_ms")
+                    if ev.get("duration_ms") is not None
+                    else "—",
+                    "Strategy": ev.get("strategy") or "—",
+                    "Reason": (ev.get("reason") or "")[:80],
+                }
+            )
 
         st.dataframe(
             pd.DataFrame(rows),

@@ -1,6 +1,7 @@
 """Tests for Phase 4 foundation — TruthReport, FieldValidationReport,
 VerificationReport, ConfidenceFusionPolicy, VerifierRegistry, ExtractionResult.
 """
+
 import unittest.mock as mock
 
 import pytest
@@ -83,9 +84,7 @@ def test_extraction_result_sample_count_reflects_self_consistency_passes(
     """sample_count=3 when borderline confidence triggers self-consistency voting."""
     from agents.extract_agent import extract
 
-    borderline_response = (
-        '{"fields": {"surname": "BORDER"}, "overall_confidence": 0.72}'
-    )
+    borderline_response = '{"fields": {"surname": "BORDER"}, "overall_confidence": 0.72}'
     mock_resp = mock.MagicMock()
     mock_resp.text = borderline_response
     with mock.patch("agents.llm_client._client") as mock_client_fn:
@@ -309,6 +308,7 @@ def test_evidence_bundle_is_frozen() -> None:
     bundle = _bundle()
     assert hasattr(bundle, "__dataclass_params__")
     import dataclasses
+
     assert dataclasses.fields(bundle)  # is a dataclass
     # frozen=True means no __setattr__ override needed; just check construction is fine
     with pytest.raises((AttributeError, TypeError)):
@@ -428,6 +428,7 @@ def test_verifier_spec_has_extractor_attribute() -> None:
 
 def test_default_extractor_returns_none() -> None:
     """A VerifierSpec without a custom extractor defaults to always-None."""
+
     def dummy(**kwargs) -> dict:
         return {"valid": True}
 
@@ -675,6 +676,7 @@ def test_truth_engine_node_multiple_verifiers_all_run() -> None:
     )
 
     import unittest.mock as mock
+
     with mock.patch("pipelines.nodes.truth_engine.verifier_registry", reg):
         state = _make_state(doc_type="test_doc")
         result = truth_engine_node(state)
@@ -721,6 +723,7 @@ def test_truth_engine_node_verification_failure_caps_confidence() -> None:
     )
 
     import unittest.mock as mock
+
     with mock.patch("pipelines.nodes.truth_engine.verifier_registry", reg):
         state = _make_state(doc_type="test_doc", classify_confidence=0.95)
         result = truth_engine_node(state)
@@ -753,7 +756,9 @@ def test_truth_engine_node_unknown_doc_type_coverage_is_one() -> None:
     extraction = ExtractionResult(
         fields={"random_field": "value"}, overall_confidence=0.7, context_used=False, sample_count=1
     )
-    result = truth_engine_node(_make_state(doc_type="nonexistent_type", extraction_result=extraction))
+    result = truth_engine_node(
+        _make_state(doc_type="nonexistent_type", extraction_result=extraction)
+    )
     report: TruthReport = result["truth_report"]
     assert report.field_validation.coverage_score == pytest.approx(1.0)
     assert report.verification_reports == []
@@ -860,8 +865,10 @@ def _make_truth_report_for_status(
         fields={}, overall_confidence=final_confidence, context_used=False, sample_count=1
     )
     fvr = FieldValidationReport(
-        required_fields_present=[], required_fields_missing=[],
-        additional_fields=[], coverage_score=1.0,
+        required_fields_present=[],
+        required_fields_missing=[],
+        additional_fields=[],
+        coverage_score=1.0,
     )
     vr = (
         [VerificationReport(verifier_name="test", passed=False, confidence=0.0)]
@@ -1139,8 +1146,10 @@ def test_truth_report_includes_persistence_decision() -> None:
             fields={}, overall_confidence=0.9, context_used=False, sample_count=1
         ),
         field_validation=FieldValidationReport(
-            required_fields_present=[], required_fields_missing=[],
-            additional_fields=[], coverage_score=1.0,
+            required_fields_present=[],
+            required_fields_missing=[],
+            additional_fields=[],
+            coverage_score=1.0,
         ),
         verification_reports=[],
         final_confidence=0.9,
@@ -1212,9 +1221,7 @@ def test_output_writer_logs_truth_engine_confidence(minio_client, postgres_sessi
     ):
         write_output(state)
 
-    logs = postgres_session.query(ConfidenceLog).filter(
-        ConfidenceLog.document_id == doc_id
-    ).all()
+    logs = postgres_session.query(ConfidenceLog).filter(ConfidenceLog.document_id == doc_id).all()
     agents = {log.agent for log in logs}
     assert "truth_engine" in agents
     assert "validate" not in agents
@@ -1246,8 +1253,10 @@ def test_truth_report_default_verifier_version_is_unknown() -> None:
             fields={}, overall_confidence=0.9, context_used=False, sample_count=1
         ),
         field_validation=FieldValidationReport(
-            required_fields_present=[], required_fields_missing=[],
-            additional_fields=[], coverage_score=1.0,
+            required_fields_present=[],
+            required_fields_missing=[],
+            additional_fields=[],
+            coverage_score=1.0,
         ),
         verification_reports=[],
         final_confidence=0.9,
@@ -1270,12 +1279,14 @@ def test_verifier_version_in_truth_audit_log(minio_client, postgres_session) -> 
     from db.models import Document, TruthAuditLog
 
     doc_id = str(uuid.uuid4())
-    postgres_session.add(Document(
-        id=doc_id,
-        filename="passport_P001_20240101.pdf",
-        object_key="raw/passport_P001_20240101.pdf",
-        status="queued",
-    ))
+    postgres_session.add(
+        Document(
+            id=doc_id,
+            filename="passport_P001_20240101.pdf",
+            object_key="raw/passport_P001_20240101.pdf",
+            status="queued",
+        )
+    )
     postgres_session.commit()
 
     from pipelines.nodes.truth_engine import truth_engine_node
@@ -1300,9 +1311,7 @@ def test_verifier_version_in_truth_audit_log(minio_client, postgres_session) -> 
     ):
         write_output(state)
 
-    audit = postgres_session.query(TruthAuditLog).filter(
-        TruthAuditLog.document_id == doc_id
-    ).one()
+    audit = postgres_session.query(TruthAuditLog).filter(TruthAuditLog.document_id == doc_id).one()
     assert audit.verifier_version == VERIFIER_VERSION
     assert audit.document_status in ("completed", "verification_failed", "failed")
     assert audit.persistence_reason != ""
@@ -1320,12 +1329,14 @@ def test_truth_audit_log_serializes_verification_reports(minio_client, postgres_
     from db.models import Document, TruthAuditLog
 
     doc_id = str(uuid.uuid4())
-    postgres_session.add(Document(
-        id=doc_id,
-        filename="bank_statement_A001_20240101.pdf",
-        object_key="raw/bank_statement_A001_20240101.pdf",
-        status="queued",
-    ))
+    postgres_session.add(
+        Document(
+            id=doc_id,
+            filename="bank_statement_A001_20240101.pdf",
+            object_key="raw/bank_statement_A001_20240101.pdf",
+            status="queued",
+        )
+    )
     postgres_session.commit()
 
     truth_report = _make_truth_report_for_status(final_confidence=0.90)
@@ -1345,9 +1356,7 @@ def test_truth_audit_log_serializes_verification_reports(minio_client, postgres_
     ):
         write_output(state)
 
-    audit = postgres_session.query(TruthAuditLog).filter(
-        TruthAuditLog.document_id == doc_id
-    ).one()
+    audit = postgres_session.query(TruthAuditLog).filter(TruthAuditLog.document_id == doc_id).one()
     assert isinstance(audit.verification_reports, list)
     assert audit.allow_completion == truth_report.persistence.allow_completion
     assert audit.document_status == truth_report.persistence.document_status

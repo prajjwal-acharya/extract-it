@@ -12,6 +12,7 @@ Covers:
   - Successful persistence regression: completed status, terminal_status written
   - persist_failed is a valid DOCUMENT_PHASE
 """
+
 from __future__ import annotations
 
 import unittest.mock as mock
@@ -184,7 +185,8 @@ class TestSuccessfulPersist:
         session, _ = self._run(doc_id, state)
 
         added_logs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in [call[0][0]]
             if isinstance(obj, ConfidenceLog) and obj.agent == "persist"
         ]
@@ -197,7 +199,8 @@ class TestSuccessfulPersist:
         session, _ = self._run(doc_id, state)
 
         audit_logs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in [call[0][0]]
             if isinstance(obj, PersistenceAuditLog)
         ]
@@ -248,7 +251,8 @@ class TestObjectStoreFailure:
         session, _ = self._run_with_store_error(doc_id, state)
 
         persist_logs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in [call[0][0]]
             if isinstance(obj, ConfidenceLog) and obj.agent == "persist"
         ]
@@ -283,7 +287,9 @@ class TestEmbeddingFailure:
         with (
             mock.patch("io_pipeline.output_writer.get_session", return_value=session),
             mock.patch("io_pipeline.output_writer.get_object_store") as mock_store,
-            mock.patch("io_pipeline.output_writer.embed", side_effect=RuntimeError("embed API down")),
+            mock.patch(
+                "io_pipeline.output_writer.embed", side_effect=RuntimeError("embed API down")
+            ),
             mock.patch("io_pipeline.output_writer.upsert_embedding"),
         ):
             mock_store.return_value.put = mock.MagicMock()
@@ -301,7 +307,9 @@ class TestEmbeddingFailure:
         with (
             mock.patch("io_pipeline.output_writer.get_session", return_value=session),
             mock.patch("io_pipeline.output_writer.get_object_store") as mock_store,
-            mock.patch("io_pipeline.output_writer.embed", side_effect=RuntimeError("embed API down")),
+            mock.patch(
+                "io_pipeline.output_writer.embed", side_effect=RuntimeError("embed API down")
+            ),
             mock.patch("io_pipeline.output_writer.upsert_embedding"),
         ):
             mock_store.return_value.put = mock.MagicMock()
@@ -309,7 +317,8 @@ class TestEmbeddingFailure:
                 write_output(state)
 
         persist_logs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in [call[0][0]]
             if isinstance(obj, ConfidenceLog) and obj.agent == "persist"
         ]
@@ -372,7 +381,8 @@ class TestPersistenceAuditLog:
             write_output(state)
 
         return [
-            call[0][0] for call in session.add.call_args_list
+            call[0][0]
+            for call in session.add.call_args_list
             if isinstance(call[0][0], PersistenceAuditLog)
         ]
 
@@ -440,7 +450,8 @@ class TestSchemaProposalRecord:
             write_output(state)
 
         return [
-            call[0][0] for call in session.add.call_args_list
+            call[0][0]
+            for call in session.add.call_args_list
             if isinstance(call[0][0], SchemaProposalRecord)
         ]
 
@@ -487,6 +498,7 @@ class TestSchemaProposalRecord:
             "rejection_reason": None,
         }
         from pipelines.resolution.models import Strategy
+
         blocked_decision = ResolutionDecision(
             strategy=Strategy.HITL,  # not ACCEPT → schema_candidate blocked
             reason="budget_exhausted",
@@ -542,6 +554,7 @@ class TestCorrectionExemplarSourceTag:
 
     def test_no_embedding_when_learning_blocked(self) -> None:
         from pipelines.resolution.models import Strategy
+
         blocked = ResolutionDecision(
             strategy=Strategy.HITL, reason="budget_exhausted", requires_human=True
         )
@@ -585,6 +598,7 @@ def test_review_route_has_no_embed_import() -> None:
 class TestSchemaProposalsAPI:
     def _make_proposal_record(self, doc_type: str = "passport") -> SchemaProposalRecord:
         from datetime import datetime
+
         return SchemaProposalRecord(
             id=str(uuid.uuid4()),
             doc_type=doc_type,

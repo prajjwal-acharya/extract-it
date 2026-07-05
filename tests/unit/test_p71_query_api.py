@@ -9,6 +9,7 @@ Covers:
   - GET /analytics — aggregate pipeline metrics
   - Regression: existing list and references endpoints unbroken
 """
+
 from __future__ import annotations
 
 import unittest.mock as mock
@@ -171,7 +172,9 @@ class TestDocumentExplorer:
 
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.all.return_value = logs
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = truth
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            truth
+        )
 
         # patch _truth_audit, _persistence_audit, _confidence_logs, _retrieval_logs selectively
         return session, doc, truth, persist, logs, retrieval
@@ -188,8 +191,13 @@ class TestDocumentExplorer:
         doc = _make_doc(doc_id)
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [[], []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            [],
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}")
@@ -206,8 +214,13 @@ class TestDocumentExplorer:
         doc = _make_doc(doc_id)
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [[], []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            [],
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}")
@@ -222,8 +235,13 @@ class TestDocumentExplorer:
         session = mock.MagicMock()
         session.get.return_value = doc
         # call order: _confidence_logs → logs; _retrieval_logs → []
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [logs, []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            logs,
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}")
@@ -236,9 +254,15 @@ class TestDocumentExplorer:
         truth = _make_truth_audit(doc_id)
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [[], []]
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            [],
+            [],
+        ]
         # call order: _truth_audit first(), _persistence_audit first()
-        session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [truth, None]
+        session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
+            truth,
+            None,
+        ]
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}")
@@ -336,7 +360,9 @@ class TestTimeline:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}/timeline")
@@ -355,8 +381,13 @@ class TestTimeline:
         ]
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [logs, []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            logs,
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}/timeline")
@@ -375,8 +406,13 @@ class TestTimeline:
         ]
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [logs, []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            logs,
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         events = [e["event"] for e in client.get(f"/documents/{doc_id}/timeline").json()]
@@ -392,10 +428,12 @@ class TestTimeline:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
-            [],         # confidence logs
+            [],  # confidence logs
             retrieval,  # retrieval logs
         ]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         events = [e["event"] for e in client.get(f"/documents/{doc_id}/timeline").json()]
@@ -408,8 +446,13 @@ class TestTimeline:
         logs = [_make_confidence_log(doc_id, "classify", 0.95, 2)]
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [logs, []]
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.all.side_effect = [
+            logs,
+            [],
+        ]
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         timeline = client.get(f"/documents/{doc_id}/timeline").json()
@@ -435,8 +478,8 @@ class TestTimeline:
             [],  # retrieval
         ]
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            None,    # truth audit
-            persist, # persistence audit
+            None,  # truth audit
+            persist,  # persistence audit
         ]
 
         client = _make_app(session)
@@ -465,7 +508,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            truth, persist
+            truth,
+            persist,
         ]
 
         client = _make_app(session)
@@ -480,7 +524,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            truth, None
+            truth,
+            None,
         ]
 
         client = _make_app(session)
@@ -498,7 +543,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            truth, None
+            truth,
+            None,
         ]
 
         client = _make_app(session)
@@ -514,7 +560,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            None, persist
+            None,
+            persist,
         ]
 
         client = _make_app(session)
@@ -529,7 +576,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            None, persist
+            None,
+            persist,
         ]
 
         client = _make_app(session)
@@ -544,7 +592,8 @@ class TestExplainEndpoint:
         session = mock.MagicMock()
         session.get.return_value = doc
         session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
-            None, persist
+            None,
+            persist,
         ]
 
         client = _make_app(session)
@@ -558,7 +607,9 @@ class TestExplainEndpoint:
         doc = _make_doc(doc_id, status="failed")
         session = mock.MagicMock()
         session.get.return_value = doc
-        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         client = _make_app(session)
         resp = client.get(f"/documents/{doc_id}/explain")
@@ -642,7 +693,11 @@ class TestSemanticSearch:
 
         mock_search.assert_called_once()
         _, kwargs = mock_search.call_args
-        assert kwargs.get("doc_type") == "passport" or mock_search.call_args[0][2] == "passport" or True
+        assert (
+            kwargs.get("doc_type") == "passport"
+            or mock_search.call_args[0][2] == "passport"
+            or True
+        )
 
     def test_missing_document_skipped(self) -> None:
         doc_id = str(uuid.uuid4())
@@ -791,8 +846,12 @@ class TestDocumentListRegression:
     def test_list_returns_200(self) -> None:
         session = mock.MagicMock()
         doc = _make_doc()
-        session.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [doc]
-        session.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [doc]
+        session.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+            doc
+        ]
+        session.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+            doc
+        ]
 
         client = _make_app(session)
         resp = client.get("/documents/")

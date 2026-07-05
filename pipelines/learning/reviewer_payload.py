@@ -9,6 +9,7 @@ Built from:
   - ResolutionDecision — planner reason for escalating to HITL
   - ExecutionHistory — what autonomous strategies were tried before HITL
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,14 +31,20 @@ class ReviewerPayload:
     # TruthReport evidence
     missing_required_fields: list[str] = field(default_factory=list)
     additional_fields: list[str] = field(default_factory=list)
-    verifier_failures: list[dict] = field(default_factory=list)   # [{name, passed, confidence, details}]
-    confidence_breakdown: dict = field(default_factory=dict)       # {final, extraction, coverage, reason}
+    verifier_failures: list[dict] = field(
+        default_factory=list
+    )  # [{name, passed, confidence, details}]
+    confidence_breakdown: dict = field(
+        default_factory=dict
+    )  # {final, extraction, coverage, reason}
 
     # ResolutionDecision context
     planner_reason: str = ""
 
     # ExecutionHistory summary
-    execution_summary: list[dict] = field(default_factory=list)   # [{strategy, outcome, timestamp, confidence_before}]
+    execution_summary: list[dict] = field(
+        default_factory=list
+    )  # [{strategy, outcome, timestamp, confidence_before}]
 
     @classmethod
     def build(cls, state: dict) -> "ReviewerPayload":
@@ -71,7 +78,9 @@ class ReviewerPayload:
             verifier_failures = []
             confidence_breakdown = {}
 
-        planner_reason = resolution_decision.reason if resolution_decision is not None else "no_decision"
+        planner_reason = (
+            resolution_decision.reason if resolution_decision is not None else "no_decision"
+        )
 
         execution_summary = [
             {

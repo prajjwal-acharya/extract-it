@@ -3,6 +3,7 @@
 This page handles document upload and shows live processing status.
 Navigate to other pages via the sidebar.
 """
+
 import time
 
 import streamlit as st

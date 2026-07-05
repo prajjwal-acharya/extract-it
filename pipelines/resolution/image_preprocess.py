@@ -15,6 +15,7 @@ PDF inputs are rendered to PNG by PyMuPDF before PIL operations, then returned
 as PNG bytes with "image/png" mime type so the LLM receives a clean raster.
 Image inputs (JPEG, PNG, TIFF) are processed directly by PIL.
 """
+
 from __future__ import annotations
 
 import io
@@ -29,16 +30,19 @@ log = logging.getLogger(__name__)
 
 def _apply_contrast(img):  # type: ignore[no-untyped-def]
     from PIL import ImageEnhance
+
     return ImageEnhance.Contrast(img).enhance(2.0)
 
 
 def _apply_sharpen(img):  # type: ignore[no-untyped-def]
     from PIL import ImageEnhance
+
     return ImageEnhance.Sharpness(img).enhance(2.5)
 
 
 def _apply_denoise(img):  # type: ignore[no-untyped-def]
     from PIL import ImageFilter
+
     return img.filter(ImageFilter.MedianFilter(size=3))
 
 
@@ -146,6 +150,8 @@ class ImagePreprocessStrategy:
 
         skipped = [op for op in operations if op not in applied and op != "render_hires"]
         if skipped:
-            log.debug("image_preprocess: skipped ops %s (no PIL/fitz or PDF was not rasterised)", skipped)
+            log.debug(
+                "image_preprocess: skipped ops %s (no PIL/fitz or PDF was not rasterised)", skipped
+            )
 
         return current_bytes, current_mime, applied

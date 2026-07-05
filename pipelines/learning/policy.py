@@ -14,6 +14,7 @@ Input:
 
 No LLM calls.  All decisions are deterministic rules applied to typed evidence.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,11 +31,11 @@ class LearningDecision:
     None of them re-derive the business logic — they only execute it.
     """
 
-    allow_learning: bool       # master gate — must be True for any learning to happen
+    allow_learning: bool  # master gate — must be True for any learning to happen
     learn_from_document: bool  # clean autonomous acceptance → add to RAG exemplars
     learn_from_correction: bool  # human-corrected doc → add as correction exemplar
-    schema_candidate: bool     # additional fields present → generate SchemaProposal
-    reason: str                # human-readable audit string
+    schema_candidate: bool  # additional fields present → generate SchemaProposal
+    reason: str  # human-readable audit string
 
 
 class LearningPolicy:
@@ -70,9 +71,7 @@ class LearningPolicy:
         te_allows = truth_report.persistence.allow_learning
         accepted = resolution_decision.strategy == Strategy.ACCEPT
         hard_failures = [
-            r.verifier_name
-            for r in truth_report.verification_reports
-            if r.passed is False
+            r.verifier_name for r in truth_report.verification_reports if r.passed is False
         ]
         no_hard_failures = not hard_failures
 

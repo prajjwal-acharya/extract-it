@@ -9,6 +9,7 @@ Approval workflow:
   POST /schema-proposals/{id}/approve  — approve → apply_diff → new SchemaVersion
   POST /schema-proposals/{id}/reject   — reject with reason (proposal stays auditable)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -90,7 +91,9 @@ def approve_proposal(proposal_id: str, session: Session = Depends(get_db)) -> di
         additions=proposal.additions_json or [],
         relaxed_fields=proposal.relaxed_fields_json or [],
     )
-    new_version = apply_diff(session, active_row, diff, origin_document_id=proposal.origin_document_id)
+    new_version = apply_diff(
+        session, active_row, diff, origin_document_id=proposal.origin_document_id
+    )
 
     proposal.status = "approved"
     proposal.approved_schema_version = new_version.version

@@ -29,7 +29,7 @@ def route_after_executor(state: GraphState) -> str:
         return "op_a_retry"
     if decision.strategy == Strategy.REJECT:
         return "persist"
-    return "op_b_hitl"   # HITL fallback
+    return "op_b_hitl"  # HITL fallback
 
 
 def route_after_hitl(state: GraphState) -> str:

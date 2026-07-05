@@ -8,6 +8,7 @@ Covers:
   - op_b_hitl_node: full integration (mocked interrupt)
   - hitl_correction flag set correctly
 """
+
 from __future__ import annotations
 
 import unittest.mock as mock
@@ -81,7 +82,8 @@ def _make_state(
         "doc_type": "passport",
         "extracted_fields": extracted_fields or {"surname": "SMITH"},
         "truth_report": truth_report,
-        "resolution_decision": resolution_decision or ResolutionDecision(
+        "resolution_decision": resolution_decision
+        or ResolutionDecision(
             strategy=Strategy.HITL,
             reason="low_confidence",
             requires_human=True,
@@ -290,8 +292,10 @@ class TestRevalidateCorrections:
         # Correction supplies the previously missing field
         report = _revalidate_corrections(state, {"passport_number": "X1234567"})
         # Field validation reflects the corrected extraction (passport_number now present)
-        assert "passport_number" not in report.field_validation.required_fields_missing \
+        assert (
+            "passport_number" not in report.field_validation.required_fields_missing
             or report.field_validation.coverage_score > 0.0
+        )
 
     def test_corrected_report_runs_verifiers(self) -> None:
         from pipelines.nodes.op_b_hitl import _revalidate_corrections
@@ -308,9 +312,7 @@ class TestRevalidateCorrections:
         state = _make_state(_make_truth_report())
         report = _revalidate_corrections(state, {"surname": "SMITH"})
         assert report.persistence is not None
-        assert report.persistence.document_status in (
-            "completed", "verification_failed", "failed"
-        )
+        assert report.persistence.document_status in ("completed", "verification_failed", "failed")
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +457,7 @@ class TestHITLNodeIntegration:
             return {"approved": True, "corrections": {}}
 
         from pipelines.nodes import op_b_hitl
+
         with mock.patch.object(op_b_hitl, "interrupt", side_effect=fake_interrupt):
             op_b_hitl.op_b_hitl_node(state)  # type: ignore[arg-type]
 

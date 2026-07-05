@@ -8,6 +8,7 @@ Covers:
   - diff_schema() unchanged (regression)
   - _build_schema_proposal in op_a_retry returns (version, proposal_dict | None)
 """
+
 from __future__ import annotations
 
 from agents.schema_diff_agent import SchemaDiff, diff_schema, normalize_key, propose_diff
@@ -68,10 +69,19 @@ class TestSchemaProposal:
         json.dumps(d)  # must not raise
 
     def test_to_dict_has_all_keys(self) -> None:
-        proposal = SchemaProposal(doc_type="passport", proposed_version="1.1", origin_document_id="d")
+        proposal = SchemaProposal(
+            doc_type="passport", proposed_version="1.1", origin_document_id="d"
+        )
         d = proposal.to_dict()
-        for key in ("doc_type", "proposed_version", "additions", "relaxed_fields",
-                    "origin_document_id", "status", "rejection_reason"):
+        for key in (
+            "doc_type",
+            "proposed_version",
+            "additions",
+            "relaxed_fields",
+            "origin_document_id",
+            "status",
+            "rejection_reason",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_to_dict_status_is_string(self) -> None:
@@ -133,7 +143,8 @@ class TestProposeDiff:
         return SimpleNamespace(
             doc_type=doc_type,
             version=version,
-            fields_json=fields or [
+            fields_json=fields
+            or [
                 {"name": "passport_number", "type": "string", "required": True},
                 {"name": "surname", "type": "string", "required": True},
             ],

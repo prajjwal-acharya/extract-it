@@ -4,6 +4,7 @@ Uses pgvector cosine similarity against stored DocumentEmbedding vectors.
 Returns matching documents with similarity score, excerpt, and metadata.
 No inference — read-only.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

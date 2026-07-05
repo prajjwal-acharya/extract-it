@@ -10,6 +10,7 @@ Phase 5.5 changes:
 Human corrections MUST flow through the Truth Engine.  No correction may bypass
 evidence evaluation and be persisted or learned from without revalidation.
 """
+
 from __future__ import annotations
 
 import logging

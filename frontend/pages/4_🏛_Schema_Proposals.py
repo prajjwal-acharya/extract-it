@@ -1,4 +1,5 @@
 """Schema Proposals — review and approve/reject pending schema changes."""
+
 import sys
 import os
 
@@ -73,9 +74,7 @@ for p in proposals:
                 with st.spinner("Approving…"):
                     try:
                         result = client.approve_proposal(pid)
-                        st.success(
-                            f"Approved → new version `{result.get('new_schema_version')}`"
-                        )
+                        st.success(f"Approved → new version `{result.get('new_schema_version')}`")
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Approval failed: {e}")

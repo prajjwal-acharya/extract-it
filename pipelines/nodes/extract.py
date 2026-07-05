@@ -28,9 +28,7 @@ def extract_node(state: GraphState) -> dict:
         context = "\n".join(f"Example: {row.chunk_text}" for row, _ in similar) or None
         retrieval_metadata = {
             "retrieved_count": len(similar),
-            "doc_ids": [
-                row.document_id for row, _ in similar if row.document_id != document_id
-            ],
+            "doc_ids": [row.document_id for row, _ in similar if row.document_id != document_id],
         }
 
         for row, distance in similar:

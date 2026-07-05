@@ -96,8 +96,10 @@ def op_a_retry_node(state: GraphState) -> dict:
             all_similar: list = []
             for query_str in better_queries:
                 results = similarity_search(
-                    session, embed(query_str, task_type="RETRIEVAL_QUERY"),
-                    top_k=2, doc_type=doc_type
+                    session,
+                    embed(query_str, task_type="RETRIEVAL_QUERY"),
+                    top_k=2,
+                    doc_type=doc_type,
                 )
                 for row, dist in results:
                     if row.document_id not in seen_ids:
@@ -108,8 +110,7 @@ def op_a_retry_node(state: GraphState) -> dict:
             # Standard RAG: embed extracted_fields JSON
             query_text = json.dumps(state.get("extracted_fields") or {})
             similar = similarity_search(
-                session, embed(query_text, task_type="RETRIEVAL_QUERY"),
-                top_k=3, doc_type=doc_type
+                session, embed(query_text, task_type="RETRIEVAL_QUERY"), top_k=3, doc_type=doc_type
             )
 
         context = "\n".join(f"Example: {row.chunk_text}" for row, _ in similar) or None

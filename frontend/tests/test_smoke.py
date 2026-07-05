@@ -6,6 +6,7 @@ the API is offline (all requests fail gracefully with st.error()).
 AppTest runs the Streamlit script headlessly — no browser required.
 API calls are mocked at the requests level so no real backend is needed.
 """
+
 from __future__ import annotations
 
 import sys
@@ -53,10 +54,21 @@ def _stub_client(
         "persistence_audit": None,
     }
     m.get_analytics.return_value = get_analytics or {
-        "totals": {"documents": 0, "completed": 0, "failed": 0,
-                   "rejected": 0, "persist_failed": 0, "awaiting_review": 0, "by_status": {}},
-        "rates": {"acceptance_rate": 0, "hitl_rate": 0,
-                  "retry_rate": 0, "schema_candidate_rate": 0},
+        "totals": {
+            "documents": 0,
+            "completed": 0,
+            "failed": 0,
+            "rejected": 0,
+            "persist_failed": 0,
+            "awaiting_review": 0,
+            "by_status": {},
+        },
+        "rates": {
+            "acceptance_rate": 0,
+            "hitl_rate": 0,
+            "retry_rate": 0,
+            "schema_candidate_rate": 0,
+        },
         "strategy_usage": {},
         "verifier_failures": {},
         "avg_confidence": {},
@@ -178,16 +190,18 @@ class TestReviewQueuePage:
         assert any("No documents" in str(t) for t in success_texts)
 
     def test_review_queue_shows_document_when_pending(self) -> None:
-        pending = [{
-            "id": "doc-pending-001",
-            "filename": "passport.pdf",
-            "doc_type": "passport",
-            "status": "awaiting_review",
-            "current_phase": "awaiting_review",
-            "extracted_fields": {"passport_number": "X123"},
-            "confidence_logs": [],
-            "references": [],
-        }]
+        pending = [
+            {
+                "id": "doc-pending-001",
+                "filename": "passport.pdf",
+                "doc_type": "passport",
+                "status": "awaiting_review",
+                "current_phase": "awaiting_review",
+                "extracted_fields": {"passport_number": "X123"},
+                "confidence_logs": [],
+                "references": [],
+            }
+        ]
         at = AppTest.from_file(self._page)
         with mock.patch("api_client.client", _stub_client(get_pending_review=pending)):
             at.run(timeout=30)
@@ -209,16 +223,18 @@ class TestSchemaProposalsPage:
         assert not at.exception
 
     def test_schema_proposals_shows_proposal(self) -> None:
-        proposals = [{
-            "id": "prop-001",
-            "doc_type": "passport",
-            "proposed_version": "1.1",
-            "additions": [{"name": "blood_type", "type": "string", "required": False}],
-            "relaxed_fields": [],
-            "origin_document_id": "doc-001",
-            "status": "pending",
-            "created_at": "2026-01-01T12:00:00",
-        }]
+        proposals = [
+            {
+                "id": "prop-001",
+                "doc_type": "passport",
+                "proposed_version": "1.1",
+                "additions": [{"name": "blood_type", "type": "string", "required": False}],
+                "relaxed_fields": [],
+                "origin_document_id": "doc-001",
+                "status": "pending",
+                "created_at": "2026-01-01T12:00:00",
+            }
+        ]
         at = AppTest.from_file(self._page)
         with mock.patch("api_client.client", _stub_client(get_pending_proposals=proposals)):
             at.run(timeout=30)
@@ -242,13 +258,19 @@ class TestAnalyticsPage:
     def test_analytics_shows_metrics(self) -> None:
         analytics = {
             "totals": {
-                "documents": 10, "completed": 8, "failed": 1,
-                "rejected": 0, "persist_failed": 0, "awaiting_review": 1,
+                "documents": 10,
+                "completed": 8,
+                "failed": 1,
+                "rejected": 0,
+                "persist_failed": 0,
+                "awaiting_review": 1,
                 "by_status": {"completed": 8, "failed": 1, "awaiting_review": 1},
             },
             "rates": {
-                "acceptance_rate": 0.80, "hitl_rate": 0.10,
-                "retry_rate": 0.20, "schema_candidate_rate": 0.05,
+                "acceptance_rate": 0.80,
+                "hitl_rate": 0.10,
+                "retry_rate": 0.20,
+                "schema_candidate_rate": 0.05,
             },
             "strategy_usage": {"accept": 8, "hitl": 1, "retry": 1},
             "verifier_failures": {"mrz_check": 2},

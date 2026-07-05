@@ -1,4 +1,5 @@
 """Analytics page — aggregate pipeline metrics and charts."""
+
 import sys
 import os
 
@@ -69,9 +70,13 @@ if by_status:
 if strategy_usage:
     st.subheader("Strategy distribution")
     col_chart, col_table = st.columns([2, 1])
-    strategy_df = pd.DataFrame(
-        {"strategy": list(strategy_usage.keys()), "count": list(strategy_usage.values())}
-    ).set_index("strategy").sort_values("count", ascending=False)
+    strategy_df = (
+        pd.DataFrame(
+            {"strategy": list(strategy_usage.keys()), "count": list(strategy_usage.values())}
+        )
+        .set_index("strategy")
+        .sort_values("count", ascending=False)
+    )
     col_chart.bar_chart(strategy_df)
     col_table.dataframe(strategy_df, use_container_width=True)
 
@@ -80,9 +85,13 @@ if strategy_usage:
 if avg_confidence:
     st.subheader("Average confidence by agent")
     col_conf, col_tbl = st.columns([2, 1])
-    conf_df = pd.DataFrame(
-        {"agent": list(avg_confidence.keys()), "avg_score": list(avg_confidence.values())}
-    ).set_index("agent").sort_values("avg_score")
+    conf_df = (
+        pd.DataFrame(
+            {"agent": list(avg_confidence.keys()), "avg_score": list(avg_confidence.values())}
+        )
+        .set_index("agent")
+        .sort_values("avg_score")
+    )
     col_conf.bar_chart(conf_df)
     col_tbl.dataframe(conf_df.style.format("{:.4f}"), use_container_width=True)
 
@@ -90,9 +99,16 @@ if avg_confidence:
 
 if verifier_failures:
     st.subheader("Verifier failures")
-    vf_df = pd.DataFrame(
-        {"verifier": list(verifier_failures.keys()), "failures": list(verifier_failures.values())}
-    ).set_index("verifier").sort_values("failures", ascending=False)
+    vf_df = (
+        pd.DataFrame(
+            {
+                "verifier": list(verifier_failures.keys()),
+                "failures": list(verifier_failures.values()),
+            }
+        )
+        .set_index("verifier")
+        .sort_values("failures", ascending=False)
+    )
     col_vf, col_vt = st.columns([2, 1])
     col_vf.bar_chart(vf_df)
     col_vt.dataframe(vf_df, use_container_width=True)

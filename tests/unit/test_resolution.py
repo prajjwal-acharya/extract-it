@@ -4,6 +4,7 @@ Covers: Strategy, RetryPlan, ExecutionRecord, ResolutionDecision,
         ResolutionPlanner, StrategyExecutor, node wiring, graph topology,
         and regression tests confirming retry behaviour is unchanged.
 """
+
 import unittest.mock as mock
 
 import pytest
@@ -85,9 +86,7 @@ def _plan(
     confidence_threshold: float = 0.85,
 ) -> ResolutionDecision:
     """Convenience wrapper: build PlannerBundle → call ResolutionPlanner.plan()."""
-    planner = ResolutionPlanner(
-        max_retries=max_retries, confidence_threshold=confidence_threshold
-    )
+    planner = ResolutionPlanner(max_retries=max_retries, confidence_threshold=confidence_threshold)
     bundle = PlannerBundle(
         truth_report=truth_report,
         execution_history=execution_history or [],
@@ -139,7 +138,10 @@ def test_retry_plan_construction() -> None:
 
 def test_retry_plan_second_attempt() -> None:
     plan = RetryPlan(
-        attempt_number=2, reason="still_low", retrieval_strategy="no_context", prompt_strategy="standard"
+        attempt_number=2,
+        reason="still_low",
+        retrieval_strategy="no_context",
+        prompt_strategy="standard",
     )
     assert plan.attempt_number == 2
 
@@ -179,9 +181,7 @@ def test_execution_record_accept_has_confidence_after() -> None:
 
 
 def test_resolution_decision_defaults() -> None:
-    decision = ResolutionDecision(
-        strategy=Strategy.ACCEPT, reason="ok", requires_human=False
-    )
+    decision = ResolutionDecision(strategy=Strategy.ACCEPT, reason="ok", requires_human=False)
     assert decision.retry_plan is None
     assert decision.execution_history == []
     assert decision.learning_candidate is False
@@ -189,7 +189,9 @@ def test_resolution_decision_defaults() -> None:
 
 
 def test_resolution_decision_with_retry_plan() -> None:
-    plan = RetryPlan(attempt_number=1, reason="low", retrieval_strategy="sim", prompt_strategy="std")
+    plan = RetryPlan(
+        attempt_number=1, reason="low", retrieval_strategy="sim", prompt_strategy="std"
+    )
     decision = ResolutionDecision(
         strategy=Strategy.RETRY,
         reason="retry",
@@ -449,11 +451,14 @@ def test_executor_timestamp_is_iso_string() -> None:
     assert "T" in ts  # ISO 8601 format
 
 
-@pytest.mark.parametrize("strategy", [
-    Strategy.BETTER_RETRIEVAL,
-    Strategy.IMAGE_PREPROCESS,
-    Strategy.MODEL_ESCALATION,
-])
+@pytest.mark.parametrize(
+    "strategy",
+    [
+        Strategy.BETTER_RETRIEVAL,
+        Strategy.IMAGE_PREPROCESS,
+        Strategy.MODEL_ESCALATION,
+    ],
+)
 def test_executor_phase54_strategies_return_record(strategy: Strategy) -> None:
     """Phase 5.4: all autonomous strategies are implemented and return ExecutionRecords."""
     executor = StrategyExecutor()
@@ -798,8 +803,10 @@ def test_planner_reads_evidence_not_document_status() -> None:
             fields={}, overall_confidence=0.40, context_used=False, sample_count=1
         ),
         field_validation=FieldValidationReport(
-            required_fields_present=[], required_fields_missing=[],
-            additional_fields=[], coverage_score=1.0,
+            required_fields_present=[],
+            required_fields_missing=[],
+            additional_fields=[],
+            coverage_score=1.0,
         ),
         verification_reports=[],
         final_confidence=0.40,  # well below 0.85 threshold
@@ -825,14 +832,16 @@ def test_planner_accepts_despite_failing_document_status_when_evidence_is_green(
             fields={}, overall_confidence=0.95, context_used=False, sample_count=1
         ),
         field_validation=FieldValidationReport(
-            required_fields_present=[], required_fields_missing=[],
-            additional_fields=[], coverage_score=1.0,
+            required_fields_present=[],
+            required_fields_missing=[],
+            additional_fields=[],
+            coverage_score=1.0,
         ),
         verification_reports=[],
         final_confidence=0.95,  # above 0.85
         decision_reason="test",
         persistence=PersistenceDecision(
-            document_status="failed",   # contradicts the evidence
+            document_status="failed",  # contradicts the evidence
             allow_completion=False,
             allow_embedding=False,
             allow_learning=False,

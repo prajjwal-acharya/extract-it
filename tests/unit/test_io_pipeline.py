@@ -102,12 +102,16 @@ def _make_doc(session, doc_id: str) -> Document:
 
 def _make_truth_report(final_confidence: float = 0.92) -> TruthReport:
     extraction = ExtractionResult(
-        fields={"surname": "SMITH"}, overall_confidence=final_confidence,
-        context_used=False, sample_count=1,
+        fields={"surname": "SMITH"},
+        overall_confidence=final_confidence,
+        context_used=False,
+        sample_count=1,
     )
     fvr = FieldValidationReport(
-        required_fields_present=[], required_fields_missing=[],
-        additional_fields=[], coverage_score=1.0,
+        required_fields_present=[],
+        required_fields_missing=[],
+        additional_fields=[],
+        coverage_score=1.0,
     )
     persistence = PersistenceDecision(
         document_status="completed",

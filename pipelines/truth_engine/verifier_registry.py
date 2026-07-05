@@ -31,9 +31,7 @@ class VerifierSpec:
     name: str
     fn: Callable[..., dict]  # fn(**kwargs) -> {"valid": bool, ...}
     description: str = ""
-    extractor: Callable[[dict], dict | None] = field(
-        default_factory=lambda: (lambda fields: None)
-    )
+    extractor: Callable[[dict], dict | None] = field(default_factory=lambda: lambda fields: None)
 
 
 # ---------------------------------------------------------------------------

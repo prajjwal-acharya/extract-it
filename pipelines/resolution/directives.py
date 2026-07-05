@@ -9,6 +9,7 @@ shared across all autonomous strategies:
   IMAGE_PREPROCESS  → converts directives to preprocessing operation names
   MODEL_ESCALATION  → uses ESCALATE_PRECISION to gate escalation
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -196,9 +197,7 @@ class DirectiveEngine:
         lines = [_DIRECTIVE_INSTRUCTIONS[d] for d in directives]
         return "\n".join(lines)
 
-    def to_retrieval_queries(
-        self, directives: list[Directive], doc_type: str
-    ) -> list[str]:
+    def to_retrieval_queries(self, directives: list[Directive], doc_type: str) -> list[str]:
         """Convert directives to targeted RAG query strings."""
         queries: list[str] = []
         seen: set[str] = set()

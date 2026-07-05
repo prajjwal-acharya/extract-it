@@ -3,7 +3,13 @@ import logging
 
 from adapters.factory import get_object_store
 from agents.llm_client import embed
-from db.models import ConfidenceLog, Document, PersistenceAuditLog, SchemaProposalRecord, TruthAuditLog
+from db.models import (
+    ConfidenceLog,
+    Document,
+    PersistenceAuditLog,
+    SchemaProposalRecord,
+    TruthAuditLog,
+)
 from db.session import get_session
 from db.vector_store import upsert_embedding
 from pipelines.learning.policy import LearningDecision, LearningPolicy
@@ -47,55 +53,63 @@ def _write_confidence_logs(session, state: GraphState, truth_report: TruthReport
         ("extract", state.get("extract_confidence")),
     ):
         if confidence is not None:
-            session.add(ConfidenceLog(
-                document_id=state["document_id"],
-                agent=agent,
-                score=confidence,
-                reason=state.get("error") or None,
-            ))
+            session.add(
+                ConfidenceLog(
+                    document_id=state["document_id"],
+                    agent=agent,
+                    score=confidence,
+                    reason=state.get("error") or None,
+                )
+            )
 
     if truth_report is not None:
-        session.add(ConfidenceLog(
-            document_id=state["document_id"],
-            agent="truth_engine",
-            score=truth_report.final_confidence,
-            reason=truth_report.decision_reason,
-        ))
+        session.add(
+            ConfidenceLog(
+                document_id=state["document_id"],
+                agent="truth_engine",
+                score=truth_report.final_confidence,
+                reason=truth_report.decision_reason,
+            )
+        )
 
     if state.get("schema_version") is not None:
-        session.add(ConfidenceLog(
-            document_id=state["document_id"],
-            agent="schema_diff",
-            score=1.0,
-            reason=f"active schema version: {state['schema_version']}",
-        ))
+        session.add(
+            ConfidenceLog(
+                document_id=state["document_id"],
+                agent="schema_diff",
+                score=1.0,
+                reason=f"active schema version: {state['schema_version']}",
+            )
+        )
 
 
 def _write_truth_audit(session, state: GraphState, truth_report: TruthReport) -> None:
-    session.add(TruthAuditLog(
-        document_id=state["document_id"],
-        doc_type=state.get("doc_type"),
-        final_confidence=truth_report.final_confidence,
-        decision_reason=truth_report.decision_reason,
-        coverage_score=truth_report.field_validation.coverage_score,
-        required_fields_missing=truth_report.field_validation.required_fields_missing,
-        additional_fields=truth_report.field_validation.additional_fields,
-        verification_reports=[
-            {
-                "verifier_name": r.verifier_name,
-                "passed": r.passed,
-                "confidence": r.confidence,
-                "details": r.details,
-            }
-            for r in truth_report.verification_reports
-        ],
-        document_status=truth_report.persistence.document_status,
-        allow_completion=truth_report.persistence.allow_completion,
-        allow_embedding=truth_report.persistence.allow_embedding,
-        allow_learning=truth_report.persistence.allow_learning,
-        persistence_reason=truth_report.persistence.reason,
-        verifier_version=truth_report.verifier_version,
-    ))
+    session.add(
+        TruthAuditLog(
+            document_id=state["document_id"],
+            doc_type=state.get("doc_type"),
+            final_confidence=truth_report.final_confidence,
+            decision_reason=truth_report.decision_reason,
+            coverage_score=truth_report.field_validation.coverage_score,
+            required_fields_missing=truth_report.field_validation.required_fields_missing,
+            additional_fields=truth_report.field_validation.additional_fields,
+            verification_reports=[
+                {
+                    "verifier_name": r.verifier_name,
+                    "passed": r.passed,
+                    "confidence": r.confidence,
+                    "details": r.details,
+                }
+                for r in truth_report.verification_reports
+            ],
+            document_status=truth_report.persistence.document_status,
+            allow_completion=truth_report.persistence.allow_completion,
+            allow_embedding=truth_report.persistence.allow_embedding,
+            allow_learning=truth_report.persistence.allow_learning,
+            persistence_reason=truth_report.persistence.reason,
+            verifier_version=truth_report.verifier_version,
+        )
+    )
 
 
 def _write_persistence_audit(
@@ -107,38 +121,48 @@ def _write_persistence_audit(
     persist_status: str,
     persist_reason: str | None,
 ) -> None:
-    session.add(PersistenceAuditLog(
-        document_id=state["document_id"],
-        resolution_strategy=resolution_decision.strategy.value if resolution_decision else None,
-        resolution_reason=resolution_decision.reason if resolution_decision else None,
-        resolution_requires_human=resolution_decision.requires_human if resolution_decision else False,
-        learning_candidate=bool(resolution_decision.learning_candidate) if resolution_decision else False,
-        allow_learning=learning_decision.allow_learning if learning_decision else False,
-        learn_from_document=learning_decision.learn_from_document if learning_decision else False,
-        learn_from_correction=learning_decision.learn_from_correction if learning_decision else False,
-        schema_candidate=learning_decision.schema_candidate if learning_decision else False,
-        learning_reason=learning_decision.reason if learning_decision else None,
-        schema_proposal_json=(
-            schema_proposal_dict
-            if (learning_decision and learning_decision.schema_candidate)
-            else None
-        ),
-        persist_status=persist_status,
-        persist_reason=persist_reason,
-    ))
+    session.add(
+        PersistenceAuditLog(
+            document_id=state["document_id"],
+            resolution_strategy=resolution_decision.strategy.value if resolution_decision else None,
+            resolution_reason=resolution_decision.reason if resolution_decision else None,
+            resolution_requires_human=resolution_decision.requires_human
+            if resolution_decision
+            else False,
+            learning_candidate=bool(resolution_decision.learning_candidate)
+            if resolution_decision
+            else False,
+            allow_learning=learning_decision.allow_learning if learning_decision else False,
+            learn_from_document=learning_decision.learn_from_document
+            if learning_decision
+            else False,
+            learn_from_correction=learning_decision.learn_from_correction
+            if learning_decision
+            else False,
+            schema_candidate=learning_decision.schema_candidate if learning_decision else False,
+            learning_reason=learning_decision.reason if learning_decision else None,
+            schema_proposal_json=(
+                schema_proposal_dict
+                if (learning_decision and learning_decision.schema_candidate)
+                else None
+            ),
+            persist_status=persist_status,
+            persist_reason=persist_reason,
+        )
+    )
 
 
-def _write_schema_proposal_record(
-    session, state: GraphState, schema_proposal_dict: dict
-) -> None:
-    session.add(SchemaProposalRecord(
-        doc_type=schema_proposal_dict.get("doc_type", ""),
-        proposed_version=schema_proposal_dict.get("proposed_version", ""),
-        additions_json=schema_proposal_dict.get("additions", []),
-        relaxed_fields_json=schema_proposal_dict.get("relaxed_fields", []),
-        origin_document_id=state.get("document_id"),
-        status="pending",
-    ))
+def _write_schema_proposal_record(session, state: GraphState, schema_proposal_dict: dict) -> None:
+    session.add(
+        SchemaProposalRecord(
+            doc_type=schema_proposal_dict.get("doc_type", ""),
+            proposed_version=schema_proposal_dict.get("proposed_version", ""),
+            additions_json=schema_proposal_dict.get("additions", []),
+            relaxed_fields_json=schema_proposal_dict.get("relaxed_fields", []),
+            origin_document_id=state.get("document_id"),
+            status="pending",
+        )
+    )
 
 
 def write_output(state: GraphState) -> None:
@@ -179,7 +203,10 @@ def write_output(state: GraphState) -> None:
         if truth_report is not None:
             _write_truth_audit(session, state, truth_report)
         _write_persistence_audit(
-            session, state, resolution_decision, learning_decision,
+            session,
+            state,
+            resolution_decision,
+            learning_decision,
             schema_proposal_dict,
             persist_status=terminal_status,
             persist_reason=None,
@@ -199,24 +226,29 @@ def write_output(state: GraphState) -> None:
             chunk_text = json.dumps(state.get("extracted_fields") or {})
             embedding_vec = embed(chunk_text)
             source = "hitl_correction" if learning_decision.learn_from_correction else "document"
-            upsert_embedding(session, state["document_id"], 0, chunk_text, embedding_vec, source=source)
+            upsert_embedding(
+                session, state["document_id"], 0, chunk_text, embedding_vec, source=source
+            )
 
         # Phase D: Terminal status + persist signal.
         doc.status = terminal_status
         doc.current_phase = terminal_status
-        session.add(ConfidenceLog(
-            document_id=state["document_id"],
-            agent="persist",
-            score=1.0,
-            reason=f"persist_success:{terminal_status}",
-        ))
+        session.add(
+            ConfidenceLog(
+                document_id=state["document_id"],
+                agent="persist",
+                score=1.0,
+                reason=f"persist_success:{terminal_status}",
+            )
+        )
         session.commit()
 
     except Exception as exc:
         persist_reason = str(exc)
         log.error(
             "event=PersistFailed document_id=%s reason=%s",
-            state.get("document_id"), persist_reason,
+            state.get("document_id"),
+            persist_reason,
         )
         session.rollback()
         try:
@@ -224,12 +256,14 @@ def write_output(state: GraphState) -> None:
             if doc is not None:
                 doc.status = "persist_failed"
                 doc.current_phase = "persist_failed"
-            session.add(ConfidenceLog(
-                document_id=state["document_id"],
-                agent="persist",
-                score=0.0,
-                reason=f"persist_failed:{persist_reason[:500]}",
-            ))
+            session.add(
+                ConfidenceLog(
+                    document_id=state["document_id"],
+                    agent="persist",
+                    score=0.0,
+                    reason=f"persist_failed:{persist_reason[:500]}",
+                )
+            )
             session.commit()
         except Exception:
             session.rollback()

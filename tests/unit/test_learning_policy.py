@@ -8,6 +8,7 @@ Covers:
   - schema_candidate when additional fields discovered
   - reason string semantics
 """
+
 from __future__ import annotations
 
 from pipelines.learning.policy import LearningDecision, LearningPolicy
@@ -44,8 +45,7 @@ def _truth_report(
             coverage_score=1.0,
         ),
         verification_reports=[
-            VerificationReport(verifier_name=n, passed=False, confidence=0.0)
-            for n in failures
+            VerificationReport(verifier_name=n, passed=False, confidence=0.0) for n in failures
         ],
         final_confidence=final_confidence,
         decision_reason="test",
@@ -109,7 +109,9 @@ class TestAllowLearning:
         report = _truth_report(allow_learning=True)
         for strategy_decision in [_hitl_decision(), _retry_decision()]:
             result = self.policy.evaluate(strategy_decision, report, [])
-            assert result.allow_learning is False, f"Expected False for {strategy_decision.strategy}"
+            assert result.allow_learning is False, (
+                f"Expected False for {strategy_decision.strategy}"
+            )
 
     def test_verifier_hard_failure_blocks_learning(self) -> None:
         decision = _accept_decision()
@@ -185,9 +187,7 @@ class TestLearnFromCorrection:
 
     def test_correction_with_blocked_learning_disables_learn_from_correction(self) -> None:
         report = _truth_report(allow_learning=False)
-        result = self.policy.evaluate(
-            _accept_decision(), report, [], is_human_correction=True
-        )
+        result = self.policy.evaluate(_accept_decision(), report, [], is_human_correction=True)
         assert result.learn_from_correction is False
 
 

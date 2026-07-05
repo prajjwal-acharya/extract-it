@@ -9,6 +9,7 @@ All evidence from the current TruthReport is preserved — escalation does not
 reset extraction results. After the escalated pass, the truth engine evaluates
 the new extraction result and the planner decides the next step.
 """
+
 from __future__ import annotations
 
 from config.settings import settings

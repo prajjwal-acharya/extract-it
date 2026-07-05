@@ -1,4 +1,5 @@
 """Semantic search page — POST /search."""
+
 import sys
 import os
 
@@ -70,9 +71,7 @@ for i, r in enumerate(results):
                 highlighted = excerpt
                 for word in query.split():
                     if len(word) > 3:
-                        highlighted = highlighted.replace(
-                            word, f"**{word}**"
-                        )
+                        highlighted = highlighted.replace(word, f"**{word}**")
                 st.markdown(f"> {highlighted}")
 
         # Embedding source badge

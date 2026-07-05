@@ -1,4 +1,5 @@
 """Tests for the extraction prompt builder — schema-guided open extraction."""
+
 import unittest.mock as mock
 
 import pytest

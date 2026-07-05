@@ -1,5 +1,6 @@
 """Tests for Phase 5.3 — PromptRefinementStrategy, PromptBuilder integration,
 execution flow, and deduplication safeguards."""
+
 from __future__ import annotations
 
 import unittest.mock as mock
@@ -134,7 +135,7 @@ def test_failure_variant_missing_fields_capped_at_five() -> None:
     variant = failure_variant(report)
     assert variant.startswith("missing_fields:")
     # At most 5 fields in the variant slug
-    fields_part = variant[len("missing_fields:"):]
+    fields_part = variant[len("missing_fields:") :]
     assert len(fields_part.split(",")) <= 5
 
 
@@ -172,12 +173,18 @@ class TestPromptRefinementStrategy:
     def test_missing_passport_number_mentions_mrz(self) -> None:
         report = _make_report(required_fields_missing=["passport_number"])
         result = self.strategy.generate(report)
-        assert "MRZ" in result.additional_instructions or "mrz" in result.additional_instructions.lower()
+        assert (
+            "MRZ" in result.additional_instructions
+            or "mrz" in result.additional_instructions.lower()
+        )
 
     def test_missing_pan_mentions_pan_format(self) -> None:
         report = _make_report(required_fields_missing=["pan_number"])
         result = self.strategy.generate(report)
-        assert "PAN" in result.additional_instructions or "alphanumeric" in result.additional_instructions
+        assert (
+            "PAN" in result.additional_instructions
+            or "alphanumeric" in result.additional_instructions
+        )
 
     def test_missing_fields_listed_in_target_fields(self) -> None:
         report = _make_report(required_fields_missing=["passport_number", "surname"])
@@ -413,9 +420,7 @@ class TestStrategyExecutorPromptRefinement:
         from pipelines.nodes.strategy_executor import strategy_executor_node
 
         report = _make_report(final_confidence=0.95)
-        decision = ResolutionDecision(
-            strategy=Strategy.ACCEPT, reason="ok", requires_human=False
-        )
+        decision = ResolutionDecision(strategy=Strategy.ACCEPT, reason="ok", requires_human=False)
         state = {
             "resolution_decision": decision,
             "truth_report": report,
@@ -453,7 +458,9 @@ class TestDuplicateRefinementPrevention:
 
     def test_multiple_prior_refinements_tracked_in_retry_plan(self) -> None:
         """RetryPlan.refinement_history must list all prior variants when refinement triggers."""
-        report_b = _make_report(required_fields_missing=["surname"])  # missing_fields:surname variant
+        report_b = _make_report(
+            required_fields_missing=["surname"]
+        )  # missing_fields:surname variant
 
         prior_a = _prior_refinement("low_confidence")
         # New missing_fields variant → PROMPT_REFINEMENT with prior history

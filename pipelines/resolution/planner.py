@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from config.settings import settings
-from pipelines.resolution.models import ExecutionRecord, PlannerBundle, ResolutionDecision, RetryPlan, Strategy
+from pipelines.resolution.models import (
+    ExecutionRecord,
+    PlannerBundle,
+    ResolutionDecision,
+    RetryPlan,
+    Strategy,
+)
 from pipelines.resolution.prompt_refinement import failure_variant
 from pipelines.truth_engine.models import TruthReport
 
@@ -10,10 +16,10 @@ from pipelines.truth_engine.models import TruthReport
 # Each is attempted once per failure-variant (variant-specific) or once per
 # document pass (variant-agnostic), controlled by the dedup helpers below.
 _AUTONOMOUS_STRATEGY_ORDER: list[Strategy] = [
-    Strategy.PROMPT_REFINEMENT,    # variant-specific: different prompt per failure type
-    Strategy.BETTER_RETRIEVAL,     # variant-specific: targeted RAG per failure type
-    Strategy.IMAGE_PREPROCESS,     # variant-agnostic: once per document pass
-    Strategy.MODEL_ESCALATION,     # variant-agnostic: once per document pass
+    Strategy.PROMPT_REFINEMENT,  # variant-specific: different prompt per failure type
+    Strategy.BETTER_RETRIEVAL,  # variant-specific: targeted RAG per failure type
+    Strategy.IMAGE_PREPROCESS,  # variant-agnostic: once per document pass
+    Strategy.MODEL_ESCALATION,  # variant-agnostic: once per document pass
 ]
 
 # Strategies that are deduplicated by (strategy, failure_variant).
@@ -117,13 +123,17 @@ class ResolutionPlanner:
                 for r in bundle.execution_history
                 if r.strategy == Strategy.PROMPT_REFINEMENT
             ]
-            prompt_strategy = "refined" if next_strategy == Strategy.PROMPT_REFINEMENT else "standard"
+            prompt_strategy = (
+                "refined" if next_strategy == Strategy.PROMPT_REFINEMENT else "standard"
+            )
             retry_plan = RetryPlan(
                 attempt_number=bundle.retry_count + 1,
                 reason=failure_reason,
                 retrieval_strategy="similarity_search",
                 prompt_strategy=prompt_strategy,
-                refinement_reason=failure_reason if next_strategy == Strategy.PROMPT_REFINEMENT else None,
+                refinement_reason=failure_reason
+                if next_strategy == Strategy.PROMPT_REFINEMENT
+                else None,
                 prompt_variant=variant if next_strategy in _VARIANT_DEDUPED else None,
                 refinement_history=[v for v in prior_variants if v],
             )
@@ -170,9 +180,7 @@ class ResolutionPlanner:
         return None
 
     @staticmethod
-    def _tried_variant(
-        history: list[ExecutionRecord], strategy: Strategy, variant: str
-    ) -> bool:
+    def _tried_variant(history: list[ExecutionRecord], strategy: Strategy, variant: str) -> bool:
         return any(
             r.strategy == strategy and r.strategy_metadata.get("prompt_variant") == variant
             for r in history

@@ -13,6 +13,7 @@ Covers:
     preprocessing_steps) in ExecutionRecord
   - Regression: RETRY, PROMPT_REFINEMENT, HITL, ACCEPT unchanged
 """
+
 from __future__ import annotations
 
 import io
@@ -258,9 +259,7 @@ class TestDirectiveEngineToPreprocessingOps:
 
     def test_ops_are_deduplicated(self) -> None:
         # FOCUS_MRZ and RECHECK_EXTRACTION both map to sharpen
-        ops = self.engine.to_preprocessing_ops(
-            [Directive.FOCUS_MRZ, Directive.RECHECK_EXTRACTION]
-        )
+        ops = self.engine.to_preprocessing_ops([Directive.FOCUS_MRZ, Directive.RECHECK_EXTRACTION])
         assert ops.count("sharpen") == 1
 
     def test_no_preprocessing_directive_returns_empty_list(self) -> None:
@@ -360,16 +359,12 @@ class TestImagePreprocessStrategy:
 
     def test_sharpen_on_png(self) -> None:
         png = _minimal_png()
-        out_bytes, out_mime, applied = self.strategy.preprocess(
-            png, "image/png", ["sharpen"]
-        )
+        out_bytes, out_mime, applied = self.strategy.preprocess(png, "image/png", ["sharpen"])
         assert "sharpen" in applied
 
     def test_denoise_on_png(self) -> None:
         png = _minimal_png()
-        out_bytes, out_mime, applied = self.strategy.preprocess(
-            png, "image/png", ["denoise"]
-        )
+        out_bytes, out_mime, applied = self.strategy.preprocess(png, "image/png", ["denoise"])
         assert "denoise" in applied
 
     def test_multiple_ops_applied_in_order(self) -> None:
@@ -532,9 +527,7 @@ class TestPlannerDeduplication:
         prior = _exec_record(Strategy.BETTER_RETRIEVAL, "low_confidence")
         # PROMPT_REFINEMENT was also tried for the new variant
         prior_refine = _exec_record(Strategy.PROMPT_REFINEMENT, variant_missing)
-        decision = _plan(
-            report_missing, retry_count=2, execution_history=[prior, prior_refine]
-        )
+        decision = _plan(report_missing, retry_count=2, execution_history=[prior, prior_refine])
         assert decision.strategy == Strategy.BETTER_RETRIEVAL
 
     def test_image_preprocess_deduped_per_document_not_per_variant(self) -> None:
@@ -686,7 +679,11 @@ class TestExecutionAnalytics:
         from pipelines.resolution.models import ResolutionDecision
 
         executor = StrategyExecutor()
-        for strategy in [Strategy.BETTER_RETRIEVAL, Strategy.IMAGE_PREPROCESS, Strategy.MODEL_ESCALATION]:
+        for strategy in [
+            Strategy.BETTER_RETRIEVAL,
+            Strategy.IMAGE_PREPROCESS,
+            Strategy.MODEL_ESCALATION,
+        ]:
             decision = ResolutionDecision(strategy=strategy, reason="t", requires_human=False)
             records = executor.execute(decision, confidence_before=0.60)
             ts = records[0].timestamp
@@ -853,16 +850,12 @@ class TestPhase5xRegressions:
         from pipelines.resolution.models import ResolutionDecision
         from pipelines.router import route_after_executor
 
-        decision = ResolutionDecision(
-            strategy=Strategy.HITL, reason="r", requires_human=True
-        )
+        decision = ResolutionDecision(strategy=Strategy.HITL, reason="r", requires_human=True)
         assert route_after_executor({"resolution_decision": decision}) == "op_b_hitl"  # type: ignore[arg-type]
 
     def test_accept_routes_to_normalize(self) -> None:
         from pipelines.resolution.models import ResolutionDecision
         from pipelines.router import route_after_executor
 
-        decision = ResolutionDecision(
-            strategy=Strategy.ACCEPT, reason="r", requires_human=False
-        )
+        decision = ResolutionDecision(strategy=Strategy.ACCEPT, reason="r", requires_human=False)
         assert route_after_executor({"resolution_decision": decision}) == "normalize"  # type: ignore[arg-type]

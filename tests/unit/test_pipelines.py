@@ -155,8 +155,10 @@ def _make_truth_report(
     verifier_failed: bool = False,
 ) -> TruthReport:
     extraction = ExtractionResult(
-        fields={"surname": "SMITH"}, overall_confidence=final_confidence,
-        context_used=False, sample_count=1,
+        fields={"surname": "SMITH"},
+        overall_confidence=final_confidence,
+        context_used=False,
+        sample_count=1,
     )
     fvr = FieldValidationReport(
         required_fields_present=[],
@@ -210,12 +212,18 @@ def test_planner_routes_to_accept_when_completed() -> None:
 
 def test_planner_routes_to_prompt_refinement_when_confidence_low_and_retries_remain() -> None:
     """Phase 5.3: first low-confidence failure → PROMPT_REFINEMENT before generic RETRY."""
-    decision = _plan(_make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=0)
+    decision = _plan(
+        _make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=0
+    )
     assert decision.strategy == Strategy.PROMPT_REFINEMENT
 
 
 def test_planner_routes_to_hitl_when_retries_exhausted() -> None:
-    decision = _plan(_make_truth_report(allow_completion=False, final_confidence=0.60), retry_count=2, max_retries=2)
+    decision = _plan(
+        _make_truth_report(allow_completion=False, final_confidence=0.60),
+        retry_count=2,
+        max_retries=2,
+    )
     assert decision.strategy == Strategy.HITL
 
 
@@ -391,9 +399,7 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
 
     with (
         mock.patch("pipelines.nodes.op_a_retry.embed", return_value=[0.0] * 768),
-        mock.patch(
-            "pipelines.nodes.op_a_retry.similarity_search", return_value=[(mock_row, 0.1)]
-        ),
+        mock.patch("pipelines.nodes.op_a_retry.similarity_search", return_value=[(mock_row, 0.1)]),
         mock.patch("pipelines.nodes.op_a_retry.extract", side_effect=capture_extract),
         mock.patch("pipelines.nodes.op_a_retry.session_scope"),
     ):
@@ -435,9 +441,7 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
 
     with (
         mock.patch("pipelines.nodes.extract.embed", return_value=[0.0] * 768),
-        mock.patch(
-            "pipelines.nodes.extract.similarity_search", return_value=[(mock_row, 0.1)]
-        ),
+        mock.patch("pipelines.nodes.extract.similarity_search", return_value=[(mock_row, 0.1)]),
         mock.patch("pipelines.nodes.extract.extract", side_effect=capture_extract),
         mock.patch("pipelines.nodes.extract.get_session"),
     ):

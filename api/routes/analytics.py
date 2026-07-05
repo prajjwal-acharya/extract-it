@@ -3,6 +3,7 @@
 Aggregates pipeline metrics from existing DB tables.
 Read-only. No inference. No planner changes.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -20,9 +21,7 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
     """Return aggregate pipeline metrics across all documents."""
     # --- Document counts by status ---
     status_rows = (
-        session.query(Document.status, func.count(Document.id))
-        .group_by(Document.status)
-        .all()
+        session.query(Document.status, func.count(Document.id)).group_by(Document.status).all()
     )
     counts_by_status: dict[str, int] = {status: int(cnt) for status, cnt in status_rows}
     total = sum(counts_by_status.values())
@@ -37,12 +36,14 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
     hitl_count = int(
         session.query(func.count(PersistenceAuditLog.id))
         .filter(PersistenceAuditLog.resolution_requires_human.is_(True))
-        .scalar() or 0
+        .scalar()
+        or 0
     )
     accept_count = int(
         session.query(func.count(PersistenceAuditLog.id))
         .filter(PersistenceAuditLog.resolution_strategy == "accept")
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     # Retry rate: docs where extract ConfidenceLog appears more than once
@@ -51,7 +52,8 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
         session.query(func.count(func.distinct(ConfidenceLog.document_id)))
         .filter(ConfidenceLog.agent == "extract")
         .having(func.count(ConfidenceLog.id) > 1)
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     denom = total_with_audit if total_with_audit > 0 else 1
@@ -73,9 +75,7 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
         .all()
     )
     avg_confidence: dict[str, float] = {
-        agent: round(float(avg_score), 4)
-        for agent, avg_score in conf_rows
-        if avg_score is not None
+        agent: round(float(avg_score), 4) for agent, avg_score in conf_rows if avg_score is not None
     }
 
     # --- Verifier failure counts from TruthAuditLog ---
@@ -83,11 +83,7 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
     # We can't efficiently aggregate JSON in SQLAlchemy without raw SQL,
     # so we fetch and aggregate in Python. Capped at 5000 rows to avoid full scan.
     verifier_failures: dict[str, int] = {}
-    audit_rows = (
-        session.query(TruthAuditLog.verification_reports)
-        .limit(5000)
-        .all()
-    )
+    audit_rows = session.query(TruthAuditLog.verification_reports).limit(5000).all()
     for (vr_list,) in audit_rows:
         for vr in vr_list or []:
             if vr.get("passed") is False:
@@ -98,7 +94,8 @@ def get_analytics(session: Session = Depends(get_db)) -> dict:
     schema_candidates = int(
         session.query(func.count(PersistenceAuditLog.id))
         .filter(PersistenceAuditLog.schema_candidate.is_(True))
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     return {

@@ -1,4 +1,5 @@
 """HITL Review Queue — approve, reject, or correct pending documents."""
+
 import sys
 import os
 
@@ -88,6 +89,7 @@ refs = doc.get("references") or []
 if refs:
     with st.expander("Similar documents used during extraction"):
         import pandas as pd
+
         st.dataframe(pd.DataFrame(refs), use_container_width=True)
 
 # ── Decision form ─────────────────────────────────────────────────────────────

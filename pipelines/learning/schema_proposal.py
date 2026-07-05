@@ -10,6 +10,7 @@ Activation path (external to the pipeline):
     → apply_diff(session, active_row, diff, origin_document_id) from schema_diff_agent
     → new SchemaVersion with is_active=True
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
