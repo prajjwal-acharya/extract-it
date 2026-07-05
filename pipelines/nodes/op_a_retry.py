@@ -27,7 +27,7 @@ def _run_schema_discovery(
             )
         ).scalar_one_or_none()
         if active_row is None:
-            return None  # no seeded reference row — fall through to YAML path unchanged
+            return None
 
         discovered = discover_fields(raw_bytes, mime_type)
         diff = diff_schema(discovered, active_row.fields_json)
@@ -45,26 +45,65 @@ def _run_schema_discovery(
         )
         return new_version.version
     except Exception as e:
-        # Discovery is an enhancement, not a correctness dependency — extraction
-        # must proceed against the current active schema regardless of failure here.
         log.warning("schema_diff_agent failed for doc_type=%s: %s", doc_type, e)
         return None
 
 
 def op_a_retry_node(state: GraphState) -> dict:
-    """Re-run extraction augmented with RAG context, after an auto-schema-evolution pass."""
+    """Re-run extraction with strategy-selected enhancements.
+
+    Consumes and then clears the following strategy-specific state fields so
+    they do not persist across passes when the next strategy is different:
+
+      refined_prompt           — PROMPT_REFINEMENT: additional instructions appended
+      better_retrieval_queries — BETTER_RETRIEVAL:  targeted queries override default RAG
+      preprocessed_bytes       — IMAGE_PREPROCESS:  rasterised/enhanced bytes
+      preprocessed_mime_type   — IMAGE_PREPROCESS:  mime type after processing
+      model_override           — MODEL_ESCALATION:  escalation model for this pass only
+    """
     doc_type = state.get("doc_type") or ""
     document_id = state["document_id"]
-    raw_bytes = state.get("raw_bytes") or get_object_store().get(state["object_key"])
     mime_type = mime_from_filename(state["filename"])
+
+    # -- Strategy: IMAGE_PREPROCESS --
+    preprocessed_bytes = state.get("preprocessed_bytes")
+    preprocessed_mime = state.get("preprocessed_mime_type")
+    if preprocessed_bytes:
+        raw_bytes = preprocessed_bytes
+        mime_type = preprocessed_mime or mime_type
+        log.info("event=RetryWithPreprocessedBytes mime_type=%s", mime_type)
+    else:
+        raw_bytes = state.get("raw_bytes") or get_object_store().get(state["object_key"])
+
+    # -- Strategy: BETTER_RETRIEVAL or standard RAG --
+    better_queries = state.get("better_retrieval_queries")
 
     with session_scope() as session:
         schema_version = _run_schema_discovery(session, doc_type, raw_bytes, mime_type, document_id)
 
-        query_text = json.dumps(state.get("extracted_fields") or {})
-        similar = similarity_search(
-            session, embed(query_text, task_type="RETRIEVAL_QUERY"), top_k=3, doc_type=doc_type
-        )
+        if better_queries:
+            # BETTER_RETRIEVAL: run multiple targeted queries, deduplicate by document_id
+            log.info("event=BetterRetrieval query_count=%d", len(better_queries))
+            seen_ids: set[str] = set()
+            all_similar: list = []
+            for query_str in better_queries:
+                results = similarity_search(
+                    session, embed(query_str, task_type="RETRIEVAL_QUERY"),
+                    top_k=2, doc_type=doc_type
+                )
+                for row, dist in results:
+                    if row.document_id not in seen_ids:
+                        seen_ids.add(row.document_id)
+                        all_similar.append((row, dist))
+            similar = sorted(all_similar, key=lambda x: x[1])[:5]
+        else:
+            # Standard RAG: embed extracted_fields JSON
+            query_text = json.dumps(state.get("extracted_fields") or {})
+            similar = similarity_search(
+                session, embed(query_text, task_type="RETRIEVAL_QUERY"),
+                top_k=3, doc_type=doc_type
+            )
+
         context = "\n".join(f"Example: {row.chunk_text}" for row, _ in similar) or None
 
         for row, distance in similar:
@@ -79,8 +118,14 @@ def op_a_retry_node(state: GraphState) -> dict:
                 )
             )
 
+    # -- Strategy: PROMPT_REFINEMENT --
     refined_prompt = state.get("refined_prompt")
     additional_instructions = refined_prompt.additional_instructions if refined_prompt else None
+
+    # -- Strategy: MODEL_ESCALATION --
+    model_override = state.get("model_override")
+    if model_override:
+        log.info("event=EscalatedModelRetry model=%s", model_override)
 
     result = extract(
         raw_bytes,
@@ -88,6 +133,7 @@ def op_a_retry_node(state: GraphState) -> dict:
         doc_type,
         context=context,
         additional_instructions=additional_instructions,
+        model_override=model_override,
     )
 
     return {
@@ -96,5 +142,10 @@ def op_a_retry_node(state: GraphState) -> dict:
         "extraction_result": result,
         "retry_count": state["retry_count"] + 1,
         "schema_version": schema_version,
-        "refined_prompt": None,  # consumed — clear so it doesn't persist to next pass
+        # Clear all strategy fields after consumption
+        "refined_prompt": None,
+        "better_retrieval_queries": None,
+        "preprocessed_bytes": None,
+        "preprocessed_mime_type": None,
+        "model_override": None,
     }

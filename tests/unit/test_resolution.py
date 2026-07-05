@@ -255,13 +255,12 @@ def test_planner_prompt_refinement_on_first_failure() -> None:
     assert decision.retry_plan.prompt_variant is not None
 
 
-def test_planner_retry_after_refinement_already_tried() -> None:
-    """Same failure pattern after PROMPT_REFINEMENT was already tried → RETRY."""
+def test_planner_better_retrieval_after_refinement_tried() -> None:
+    """Phase 5.4: after PROMPT_REFINEMENT, planner tries BETTER_RETRIEVAL next."""
     from pipelines.resolution.prompt_refinement import failure_variant
 
     report = _make_truth_report("failed", 0.60)
     variant = failure_variant(report)
-    # Simulate a previous PROMPT_REFINEMENT attempt for this variant in history
     prior_refinement = ExecutionRecord(
         strategy=Strategy.PROMPT_REFINEMENT,
         timestamp="2024-01-01T00:00:00Z",
@@ -271,12 +270,41 @@ def test_planner_retry_after_refinement_already_tried() -> None:
         strategy_metadata={"prompt_variant": variant},
     )
     decision = _plan(report, retry_count=1, execution_history=[prior_refinement])
-    assert decision.strategy == Strategy.RETRY
+    # BETTER_RETRIEVAL is next in the autonomous strategy cycle
+    assert decision.strategy == Strategy.BETTER_RETRIEVAL
     assert decision.requires_human is False
 
 
-def test_planner_retry_after_verification_failed_refinement_tried() -> None:
-    """PROMPT_REFINEMENT for verifier failure already tried → RETRY."""
+def test_planner_retry_after_all_autonomous_strategies_tried() -> None:
+    """After all 4 autonomous strategies are tried → generic RETRY."""
+    from pipelines.resolution.models import Strategy
+    from pipelines.resolution.prompt_refinement import failure_variant
+
+    report = _make_truth_report("failed", 0.60)
+    variant = failure_variant(report)
+
+    def _rec(strategy, variant_key=None):
+        return ExecutionRecord(
+            strategy=strategy,
+            timestamp="t",
+            outcome="scheduled",
+            confidence_before=0.60,
+            confidence_after=None,
+            strategy_metadata={"prompt_variant": variant_key} if variant_key else {},
+        )
+
+    history = [
+        _rec(Strategy.PROMPT_REFINEMENT, variant),
+        _rec(Strategy.BETTER_RETRIEVAL, variant),
+        _rec(Strategy.IMAGE_PREPROCESS),
+        _rec(Strategy.MODEL_ESCALATION),
+    ]
+    decision = _plan(report, retry_count=4, max_retries=6, execution_history=history)
+    assert decision.strategy == Strategy.RETRY
+
+
+def test_planner_better_retrieval_after_verification_failed_refinement_tried() -> None:
+    """Phase 5.4: PROMPT_REFINEMENT for verifier failure already tried → BETTER_RETRIEVAL next."""
     from pipelines.resolution.prompt_refinement import failure_variant
 
     report = _make_truth_report("verification_failed")
@@ -290,7 +318,7 @@ def test_planner_retry_after_verification_failed_refinement_tried() -> None:
         strategy_metadata={"prompt_variant": variant},
     )
     decision = _plan(report, retry_count=1, execution_history=[prior])
-    assert decision.strategy == Strategy.RETRY
+    assert decision.strategy == Strategy.BETTER_RETRIEVAL
 
 
 def test_planner_retry_plan_populated() -> None:
@@ -426,11 +454,13 @@ def test_executor_timestamp_is_iso_string() -> None:
     Strategy.IMAGE_PREPROCESS,
     Strategy.MODEL_ESCALATION,
 ])
-def test_executor_unimplemented_strategies_raise_not_implemented(strategy: Strategy) -> None:
+def test_executor_phase54_strategies_return_record(strategy: Strategy) -> None:
+    """Phase 5.4: all autonomous strategies are implemented and return ExecutionRecords."""
     executor = StrategyExecutor()
-    decision = ResolutionDecision(strategy=strategy, reason="future", requires_human=False)
-    with pytest.raises(NotImplementedError, match="reserved for a future phase"):
-        executor.execute(decision, confidence_before=0.80)
+    decision = ResolutionDecision(strategy=strategy, reason="autonomous", requires_human=False)
+    records = executor.execute(decision, confidence_before=0.80)
+    assert len(records) == 1
+    assert records[0].strategy == strategy
 
 
 def test_executor_prompt_refinement_returns_record() -> None:
@@ -626,8 +656,8 @@ def test_graph_route_after_truth_is_removed() -> None:
 def test_execution_history_accumulates_across_retry_passes() -> None:
     """execution_history must append (not overwrite) across multiple passes.
 
-    Phase 5.3: first failure → PROMPT_REFINEMENT; second (refinement tried) → RETRY;
-    third (success) → ACCEPT. Each pass appends one record.
+    Phase 5.4 cycle: failure → PROMPT_REFINEMENT → BETTER_RETRIEVAL → ACCEPT.
+    Each pass appends exactly one record.
     """
     from pipelines.nodes.resolution_planner import resolution_planner_node
     from pipelines.nodes.strategy_executor import strategy_executor_node
@@ -647,7 +677,7 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
     assert len(history_pass1) == 1
     assert history_pass1[0].strategy == Strategy.PROMPT_REFINEMENT
 
-    # Pass 2 — refinement tried, still failing → RETRY
+    # Pass 2 — PROMPT_REFINEMENT tried for this variant → BETTER_RETRIEVAL
     state2 = {
         "truth_report": report_low,
         "retry_count": 1,
@@ -657,10 +687,10 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
     exec_result2 = strategy_executor_node({**state2, **plan_result2})  # type: ignore[arg-type]
     history_pass2: list = exec_result2["execution_history"]
     assert len(history_pass2) == 1
-    assert history_pass2[0].strategy == Strategy.RETRY
+    assert history_pass2[0].strategy == Strategy.BETTER_RETRIEVAL
 
-    # Pass 3 — extraction succeeds → ACCEPT
-    accumulated = history_pass1 + history_pass2  # LangGraph reducer does this
+    # Pass 3 — extraction succeeds → ACCEPT (regardless of remaining budget)
+    accumulated = history_pass1 + history_pass2  # LangGraph Annotated reducer does this
     state3 = {
         "truth_report": report_high,
         "retry_count": 2,
@@ -676,7 +706,7 @@ def test_execution_history_accumulates_across_retry_passes() -> None:
     full = accumulated + history_pass3
     assert len(full) == 3
     assert full[0].strategy == Strategy.PROMPT_REFINEMENT
-    assert full[1].strategy == Strategy.RETRY
+    assert full[1].strategy == Strategy.BETTER_RETRIEVAL
     assert full[2].strategy == Strategy.ACCEPT
 
 
@@ -719,21 +749,31 @@ def test_retry_plan_always_uses_similarity_search() -> None:
     assert d2.retry_plan.retrieval_strategy == "similarity_search"
 
 
-def test_retry_strategy_uses_standard_prompt_after_refinement_tried() -> None:
-    """After PROMPT_REFINEMENT is tried, RETRY uses 'standard' prompt_strategy."""
+def test_retry_strategy_uses_standard_prompt_after_all_variant_strategies_tried() -> None:
+    """After PROMPT_REFINEMENT + BETTER_RETRIEVAL + IMAGE_PREPROCESS + MODEL_ESCALATION,
+    planner falls to RETRY with 'standard' prompt_strategy."""
     from pipelines.resolution.prompt_refinement import failure_variant
 
     report = _make_truth_report("failed", 0.60)
     variant = failure_variant(report)
-    prior = ExecutionRecord(
-        strategy=Strategy.PROMPT_REFINEMENT,
-        timestamp="t",
-        outcome="refinement_scheduled",
-        confidence_before=0.60,
-        confidence_after=None,
-        strategy_metadata={"prompt_variant": variant},
-    )
-    decision = _plan(report, retry_count=1, execution_history=[prior])
+
+    def _rec(strategy, variant_key=None):
+        return ExecutionRecord(
+            strategy=strategy,
+            timestamp="t",
+            outcome="scheduled",
+            confidence_before=0.60,
+            confidence_after=None,
+            strategy_metadata={"prompt_variant": variant_key} if variant_key else {},
+        )
+
+    history = [
+        _rec(Strategy.PROMPT_REFINEMENT, variant),
+        _rec(Strategy.BETTER_RETRIEVAL, variant),
+        _rec(Strategy.IMAGE_PREPROCESS),
+        _rec(Strategy.MODEL_ESCALATION),
+    ]
+    decision = _plan(report, retry_count=4, max_retries=8, execution_history=history)
     assert decision.strategy == Strategy.RETRY
     assert decision.retry_plan.prompt_strategy == "standard"
 

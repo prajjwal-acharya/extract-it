@@ -4,35 +4,32 @@ from datetime import datetime, timezone
 
 from pipelines.resolution.models import ExecutionRecord, ResolutionDecision, Strategy
 
-_UNIMPLEMENTED: frozenset[Strategy] = frozenset(
-    {
-        Strategy.BETTER_RETRIEVAL,
-        Strategy.IMAGE_PREPROCESS,
-        Strategy.MODEL_ESCALATION,
-    }
-)
+# Strategies still pending a future phase
+_UNIMPLEMENTED: frozenset[Strategy] = frozenset()
 
 _OUTCOME: dict[Strategy, str] = {
     Strategy.ACCEPT: "accepted",
     Strategy.RETRY: "retry_scheduled",
     Strategy.PROMPT_REFINEMENT: "refinement_scheduled",
+    Strategy.BETTER_RETRIEVAL: "better_retrieval_scheduled",
+    Strategy.IMAGE_PREPROCESS: "preprocess_scheduled",
+    Strategy.MODEL_ESCALATION: "escalation_scheduled",
     Strategy.HITL: "hitl_required",
     Strategy.REJECT: "rejected",
 }
 
 
 class StrategyExecutor:
-    """Executes the strategy chosen by ResolutionPlanner.
+    """Records autonomous strategy execution attempts.
 
-    RETRY and PROMPT_REFINEMENT both route to op_a_retry_node via the graph.
-    The difference is that PROMPT_REFINEMENT also sets refined_prompt in state
-    (handled by strategy_executor_node, not here) so op_a_retry knows to append
-    the focused guidance to the base prompt.
+    The executor is responsible for:
+      - Validating that the strategy is implemented
+      - Building the ExecutionRecord (outcome, metadata, analytics)
+      - Returning the record list for LangGraph's operator.add accumulator
 
-    ACCEPT, HITL, and REJECT are recorded; actual work happens in downstream
-    graph nodes (normalize, op_b_hitl, persist).
-
-    Remaining placeholder strategies raise NotImplementedError.
+    Strategy-specific side effects (building RefinedPrompt, retrieval queries,
+    preprocessing bytes, model override) are handled by strategy_executor_node,
+    which has full access to GraphState. The executor remains a pure recorder.
     """
 
     def execute(
@@ -40,19 +37,22 @@ class StrategyExecutor:
         decision: ResolutionDecision,
         confidence_before: float,
         evidence_before: dict | None = None,
+        directives: list[str] | None = None,
+        model_used: str | None = None,
+        retrieval_count: int = 0,
+        preprocessing_steps: list[str] | None = None,
     ) -> list[ExecutionRecord]:
         """Record the execution attempt and return the new history entries.
 
-        Returns a list so LangGraph's operator.add reducer appends it to
-        the accumulated execution_history in GraphState.
-
-        evidence_before is a snapshot of key metrics at decision time.
-        evidence_after is always None here — filled by the next truth_engine pass.
+        Additional analytics parameters capture telemetry produced by the node:
+          directives         — Directive.value strings that drove the strategy
+          model_used         — explicit model name if MODEL_ESCALATION, else None
+          retrieval_count    — number of RAG chunks retrieved by BETTER_RETRIEVAL
+          preprocessing_steps — ops applied by IMAGE_PREPROCESS
         """
         if decision.strategy in _UNIMPLEMENTED:
             raise NotImplementedError(
-                f"Strategy {decision.strategy.value!r} is reserved for a future phase "
-                "and has not been implemented yet."
+                f"Strategy {decision.strategy.value!r} is not yet implemented."
             )
 
         strategy_metadata: dict = {}
@@ -76,6 +76,10 @@ class StrategyExecutor:
             confidence_before=confidence_before,
             confidence_after=confidence_before if decision.strategy == Strategy.ACCEPT else None,
             strategy_metadata=strategy_metadata,
+            directives=directives or [],
+            model_used=model_used,
+            retrieval_count=retrieval_count,
+            preprocessing_steps=preprocessing_steps or [],
             evidence_before=evidence_before,
         )
         return [record]

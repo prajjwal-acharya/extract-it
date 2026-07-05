@@ -5,13 +5,20 @@ focused additional instructions that are appended to the base extraction
 prompt on the next attempt. No LLM is involved in generation — all rules
 are deterministic and evidence-driven.
 
+Phase 5.4: PromptRefinementStrategy now delegates instruction generation to
+DirectiveEngine so that the evidence→instruction mapping is defined in one
+place and shared with BETTER_RETRIEVAL and IMAGE_PREPROCESS.
+
 failure_variant() is shared with ResolutionPlanner so both components agree
 on what constitutes "the same failure pattern" for deduplication purposes.
 """
 from __future__ import annotations
 
+from pipelines.resolution.directives import Directive, DirectiveEngine, _FIELD_DIRECTIVES
 from pipelines.resolution.models import RefinedPrompt
 from pipelines.truth_engine.models import TruthReport
+
+_directive_engine = DirectiveEngine()
 
 # ---------------------------------------------------------------------------
 # Field-specific extraction hints
@@ -135,20 +142,51 @@ def failure_variant(truth_report: TruthReport, coverage_threshold: float = 0.80)
 # ---------------------------------------------------------------------------
 
 class PromptRefinementStrategy:
-    """Generates a RefinedPrompt from TruthReport evidence.
+    """Generates a RefinedPrompt from TruthReport evidence via DirectiveEngine.
 
-    All generation is deterministic. No LLM is called.
-    The returned RefinedPrompt.additional_instructions is appended to
-    the base extraction prompt on the next op_a_retry pass.
+    Phase 5.4: instruction text is now generated from typed Directive labels
+    via DirectiveEngine so that the evidence→instruction mapping is shared
+    with BETTER_RETRIEVAL and IMAGE_PREPROCESS. The external interface is
+    unchanged: generate(truth_report) → RefinedPrompt.
     """
 
     def __init__(self, coverage_threshold: float = 0.80) -> None:
         self._coverage_threshold = coverage_threshold
 
     def generate(self, truth_report: TruthReport) -> RefinedPrompt:
-        """Inspect evidence and generate focused additional instructions."""
+        """Inspect evidence and generate focused additional instructions.
+
+        Instructions are built from:
+          1. Directive-based generic guidance (shared mapping from DirectiveEngine)
+          2. Specific context appended for verifier names and uncovered field names
+             so the LLM receives actionable, document-specific hints.
+        """
         variant = failure_variant(truth_report, self._coverage_threshold)
-        instructions, reason, targets = self._build(truth_report)
+        directives = _directive_engine.generate(truth_report)
+        parts = [_directive_engine.to_prompt_instructions(directives)]
+
+        # Append specific verifier names so the model knows which checks failed
+        failed_verifiers = [
+            r.verifier_name
+            for r in truth_report.verification_reports
+            if r.passed is False
+        ]
+        if failed_verifiers:
+            parts.append(
+                f"Specifically re-check fields for: {', '.join(failed_verifiers)}."
+            )
+
+        # Append field names for required fields NOT covered by a known directive
+        missing = truth_report.field_validation.required_fields_missing
+        uncovered = [f for f in missing if f not in _FIELD_DIRECTIVES]
+        if uncovered:
+            parts.append(
+                f"Also search all document sections for: {', '.join(uncovered)}."
+            )
+
+        instructions = "\n".join(parts)
+        reason = self._reason_from_directives(directives, truth_report)
+        targets = self._target_fields_from_truth(truth_report)
         return RefinedPrompt(
             additional_instructions=instructions,
             refinement_reason=reason,
@@ -158,72 +196,26 @@ class PromptRefinementStrategy:
 
     # ------------------------------------------------------------------ private
 
-    def _build(self, truth_report: TruthReport) -> tuple[str, str, list[str]]:
-        """Return (additional_instructions, refinement_reason, target_fields)."""
-        failed_verifiers = [
-            r.verifier_name for r in truth_report.verification_reports if r.passed is False
-        ]
-        if failed_verifiers:
-            return self._verifier_instructions(failed_verifiers)
-
+    @staticmethod
+    def _reason_from_directives(
+        directives: list[Directive], truth_report: TruthReport
+    ) -> str:
+        """Build a concise human-readable reason from the directives selected."""
+        if any(d == Directive.RECHECK_EXTRACTION for d in directives):
+            failed = [
+                r.verifier_name
+                for r in truth_report.verification_reports
+                if r.passed is False
+            ]
+            return f"Deterministic verification failed: {failed}."
         missing = truth_report.field_validation.required_fields_missing
         if missing:
-            return self._missing_field_instructions(missing)
-
-        if truth_report.field_validation.coverage_score < self._coverage_threshold:
-            return (
-                "Inspect all sections of the document — including headers, footers, "
-                "margins, and the back of the document — before completing extraction. "
-                "Do not stop at the first readable section.",
-                "Insufficient schema coverage detected.",
-                [],
-            )
-
-        return (
-            "Be more careful and precise in extraction. "
-            "Read each field value directly from the document text rather than inferring it. "
-            "If a value is ambiguous, choose the most explicit occurrence.",
-            "Extraction confidence below threshold.",
-            [],
-        )
+            return f"Required fields missing after extraction: {missing}."
+        cov = truth_report.field_validation.coverage_score
+        if cov < 0.80:
+            return f"Insufficient schema coverage: {cov:.2%}."
+        return "Extraction confidence below threshold."
 
     @staticmethod
-    def _missing_field_instructions(missing: list[str]) -> tuple[str, str, list[str]]:
-        lines = [
-            f"The following required fields were not extracted on the previous attempt. "
-            f"Look carefully for each one:"
-        ]
-        for field_name in missing:
-            hint = _FIELD_HINTS.get(field_name)
-            if hint:
-                lines.append(f"- {field_name}: {hint}")
-            else:
-                lines.append(
-                    f"- {field_name}: Search all sections of the document for this field."
-                )
-        return (
-            "\n".join(lines),
-            f"Required fields missing after extraction: {missing}.",
-            list(missing),
-        )
-
-    @staticmethod
-    def _verifier_instructions(failed_verifiers: list[str]) -> tuple[str, str, list[str]]:
-        lines = [
-            f"Deterministic verification failed for: {', '.join(failed_verifiers)}. "
-            f"Re-extract the relevant fields with greater care:"
-        ]
-        for verifier in failed_verifiers:
-            hint = _VERIFIER_HINTS.get(verifier)
-            if hint:
-                lines.append(f"- {verifier}: {hint}")
-            else:
-                lines.append(
-                    f"- {verifier}: Re-extract the fields covered by this verifier "
-                    f"from the original document text."
-                )
-        return (
-            "\n".join(lines),
-            f"Deterministic verification failed: {failed_verifiers}.",
-            [],
-        )
+    def _target_fields_from_truth(truth_report: TruthReport) -> list[str]:
+        return list(truth_report.field_validation.required_fields_missing)

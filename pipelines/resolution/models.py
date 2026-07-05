@@ -70,18 +70,29 @@ class ExecutionRecord:
     execution_history is a list of these stored in GraphState. The planner
     reads history on every pass so it can adapt based on past outcomes.
 
-    strategy_metadata carries strategy-specific context (e.g. which verifiers
-    failed, which fields were missing) for richer history inspection.
-    duration_ms and evidence_after are populated by post-execution hooks
-    when available; None otherwise.
+    strategy_metadata carries strategy-specific context for richer history
+    inspection and analytics. The full telemetry set per execution:
+      strategy           — which strategy was chosen
+      directives         — directive labels that drove the strategy
+      model_used         — model name used for extraction (None = default)
+      retrieval_count    — number of retrieved context chunks
+      preprocessing_steps — list of preprocessing op names applied
+      confidence_before  — confidence at decision time
+      confidence_after   — confidence after execution (None until next pass)
+      duration_ms        — wall-clock execution time (None if not measured)
+      outcome            — canonical outcome string
     """
 
     strategy: Strategy
     timestamp: str              # ISO 8601 UTC
-    outcome: str                # "accepted" | "retry_scheduled" | "hitl_required" | "rejected"
+    outcome: str                # "accepted" | "retry_scheduled" | "refinement_scheduled" | ...
     confidence_before: float
     confidence_after: float | None          # set only when outcome is final (ACCEPT)
     strategy_metadata: dict = field(default_factory=dict)
+    directives: list[str] = field(default_factory=list)   # Directive.value strings
+    model_used: str | None = None           # explicit model name when escalated
+    retrieval_count: int = 0                # RAG chunks retrieved
+    preprocessing_steps: list[str] = field(default_factory=list)
     duration_ms: float | None = None
     evidence_before: dict | None = None     # snapshot of key metrics at decision time
     evidence_after: dict | None = None      # snapshot after execution (filled by next pass)

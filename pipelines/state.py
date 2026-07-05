@@ -41,7 +41,14 @@ class GraphState(TypedDict):
     # ── Resolution Engine outputs (Phase 5) ──────────────────────────────────
     resolution_decision: ResolutionDecision | None
     execution_history: Annotated[list[ExecutionRecord], operator.add]
-    refined_prompt: RefinedPrompt | None   # set by strategy_executor for PROMPT_REFINEMENT; None otherwise
+    # Strategy side-effects — each written by strategy_executor_node and cleared
+    # (set to None) by op_a_retry_node after consumption so they never leak
+    # across passes when the next pass selects a different strategy.
+    refined_prompt: RefinedPrompt | None           # PROMPT_REFINEMENT
+    better_retrieval_queries: list[str] | None     # BETTER_RETRIEVAL — targeted query strings
+    preprocessed_bytes: bytes | None               # IMAGE_PREPROCESS — rasterised/enhanced bytes
+    preprocessed_mime_type: str | None             # IMAGE_PREPROCESS — mime type after processing
+    model_override: str | None                     # MODEL_ESCALATION — escalation model name
 
     # ── Validate node outputs (kept for op_b_hitl display compat) ──────────
     # validation_issues no longer populated by validate_node (removed in P4.2);

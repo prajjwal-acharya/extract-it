@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     PUBSUB_TOPIC: str = ""
 
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"  # 250 RPD / 15 RPM free tier; tested in pre-P9 pass
+    GEMINI_ESCALATION_MODEL: str = "gemini-3.1-pro"  # used by MODEL_ESCALATION strategy
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     EMBEDDING_DIMENSIONS: int = 768
     GOOGLE_API_KEY: str = ""

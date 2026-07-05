@@ -17,8 +17,13 @@ def generate(
     image_bytes: bytes | None = None,
     mime_type: str = "application/pdf",
     response_schema: type | None = None,
+    model: str | None = None,
 ) -> str:
-    """Send a prompt (and optional image/doc bytes) to the configured Gemini model."""
+    """Send a prompt (and optional image/doc bytes) to the configured Gemini model.
+
+    model overrides settings.GEMINI_MODEL when provided — used by MODEL_ESCALATION
+    to route the escalated retry through a higher-tier model.
+    """
     contents: list = [prompt]
     if image_bytes is not None:
         contents.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
@@ -31,7 +36,7 @@ def generate(
         )
 
     response = _client().models.generate_content(
-        model=settings.GEMINI_MODEL,
+        model=model or settings.GEMINI_MODEL,
         contents=contents,
         config=config,
     )

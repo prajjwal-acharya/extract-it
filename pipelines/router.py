@@ -19,11 +19,17 @@ def route_after_executor(state: GraphState) -> str:
         return "op_b_hitl"
     if decision.strategy == Strategy.ACCEPT:
         return "normalize"
-    if decision.strategy in (Strategy.RETRY, Strategy.PROMPT_REFINEMENT):
+    if decision.strategy in (
+        Strategy.RETRY,
+        Strategy.PROMPT_REFINEMENT,
+        Strategy.BETTER_RETRIEVAL,
+        Strategy.IMAGE_PREPROCESS,
+        Strategy.MODEL_ESCALATION,
+    ):
         return "op_a_retry"
     if decision.strategy == Strategy.REJECT:
         return "persist"
-    return "op_b_hitl"   # HITL and all unimplemented future strategies
+    return "op_b_hitl"   # HITL fallback
 
 
 def route_after_hitl(state: GraphState) -> str:

@@ -188,15 +188,19 @@ class TestPromptRefinementStrategy:
         assert "surname" in result.target_fields
 
     def test_missing_unknown_field_still_generates_instruction(self) -> None:
+        """Fields not in the directive map must appear in the supplemental context section."""
         report = _make_report(required_fields_missing=["some_novel_field_xyz"])
         result = self.strategy.generate(report)
+        # "some_novel_field_xyz" is not in _FIELD_DIRECTIVES → appended as uncovered field
         assert "some_novel_field_xyz" in result.additional_instructions
 
     # ---- verifier failure rules ----
 
     def test_verifier_failure_mentions_failed_verifier(self) -> None:
+        """Phase 5.4: verifier name appended as specific context after directive instructions."""
         report = _make_report(verifier_names_failed=["mrz_check"])
         result = self.strategy.generate(report)
+        # Verifier name is in the supplemental context section
         assert "mrz_check" in result.additional_instructions
 
     def test_verifier_failure_has_no_target_fields(self) -> None:
@@ -205,6 +209,7 @@ class TestPromptRefinementStrategy:
         assert result.target_fields == []
 
     def test_unknown_verifier_still_generates_instruction(self) -> None:
+        """Unknown verifier name must appear in the supplemental context section."""
         report = _make_report(verifier_names_failed=["custom_verifier_abc"])
         result = self.strategy.generate(report)
         assert "custom_verifier_abc" in result.additional_instructions
@@ -428,48 +433,91 @@ class TestStrategyExecutorPromptRefinement:
 
 
 class TestDuplicateRefinementPrevention:
-    def test_same_variant_triggers_retry_not_refinement(self) -> None:
-        """Planner must choose RETRY when the same variant was already refined."""
+    def test_same_variant_triggers_better_retrieval_not_refinement(self) -> None:
+        """Phase 5.4: after PROMPT_REFINEMENT tried, next untried strategy is BETTER_RETRIEVAL."""
         report = _make_report(final_confidence=0.55)
         variant = failure_variant(report)
         prior = _prior_refinement(variant)
         decision = _plan(report, retry_count=1, execution_history=[prior])
-        assert decision.strategy == Strategy.RETRY
+        assert decision.strategy == Strategy.BETTER_RETRIEVAL
 
     def test_different_variant_can_still_trigger_refinement(self) -> None:
         """A different failure pattern may still be refined even if one was already tried."""
-        report_conf = _make_report(final_confidence=0.55)   # low_confidence variant
-        report_missing = _make_report(required_fields_missing=["passport_number"])  # missing_fields variant
+        report_missing = _make_report(required_fields_missing=["passport_number"])
 
         # Only low_confidence was refined previously
         prior = _prior_refinement("low_confidence")
 
-        # New failure pattern = missing_fields → should still pick PROMPT_REFINEMENT
+        # New failure pattern = missing_fields:passport_number → PROMPT_REFINEMENT still applies
         decision = _plan(report_missing, retry_count=1, execution_history=[prior])
         assert decision.strategy == Strategy.PROMPT_REFINEMENT
         assert decision.retry_plan.prompt_variant.startswith("missing_fields:")
 
     def test_multiple_prior_refinements_tracked_in_retry_plan(self) -> None:
         """RetryPlan.refinement_history must list all prior variants when refinement triggers."""
-        report_a = _make_report(final_confidence=0.55)              # low_confidence variant
         report_b = _make_report(required_fields_missing=["surname"])  # missing_fields:surname variant
 
         prior_a = _prior_refinement("low_confidence")
-        # Now encountering a new missing_fields variant
+        # New missing_fields variant → PROMPT_REFINEMENT with prior history
         decision = _plan(report_b, retry_count=1, execution_history=[prior_a])
         assert decision.strategy == Strategy.PROMPT_REFINEMENT
         assert "low_confidence" in decision.retry_plan.refinement_history
 
-    def test_no_infinite_refinement_loop(self) -> None:
-        """After PROMPT_REFINEMENT is tried for every reachable variant, fall to RETRY/HITL."""
+    def test_no_infinite_loop_all_strategies_exhausted(self) -> None:
+        """After all 4 autonomous strategies exhausted, fall to RETRY (then eventually HITL)."""
         report = _make_report(final_confidence=0.55)
         variant = failure_variant(report)
 
-        prior = _prior_refinement(variant)
-        decision = _plan(report, retry_count=1, max_retries=2, execution_history=[prior])
-        # RETRY (refinement tried for this pattern) or HITL (budget exhausted) — not refinement again
-        assert decision.strategy in (Strategy.RETRY, Strategy.HITL)
-        assert decision.strategy != Strategy.PROMPT_REFINEMENT
+        def _rec(strategy, variant_key=None):
+            return ExecutionRecord(
+                strategy=strategy,
+                timestamp="t",
+                outcome="scheduled",
+                confidence_before=0.55,
+                confidence_after=None,
+                strategy_metadata={"prompt_variant": variant_key} if variant_key else {},
+            )
+
+        history = [
+            _rec(Strategy.PROMPT_REFINEMENT, variant),
+            _rec(Strategy.BETTER_RETRIEVAL, variant),
+            _rec(Strategy.IMAGE_PREPROCESS),
+            _rec(Strategy.MODEL_ESCALATION),
+        ]
+        decision = _plan(report, retry_count=4, max_retries=8, execution_history=history)
+        # All autonomous strategies tried → generic RETRY
+        assert decision.strategy == Strategy.RETRY
+
+    def test_image_preprocess_tried_only_once_per_document(self) -> None:
+        """IMAGE_PREPROCESS dedup is variant-agnostic — tried once regardless of failure type."""
+        report_a = _make_report(final_confidence=0.55)   # low_confidence
+        report_b = _make_report(required_fields_missing=["passport_number"])  # missing_fields
+
+        prior_proc = ExecutionRecord(
+            strategy=Strategy.IMAGE_PREPROCESS,
+            timestamp="t",
+            outcome="preprocess_scheduled",
+            confidence_before=0.55,
+            confidence_after=None,
+            strategy_metadata={},
+        )
+        # Even with a different failure pattern, IMAGE_PREPROCESS is not retried
+        decision = _plan(report_b, retry_count=2, max_retries=6, execution_history=[prior_proc])
+        assert decision.strategy != Strategy.IMAGE_PREPROCESS
+
+    def test_model_escalation_tried_only_once_per_document(self) -> None:
+        """MODEL_ESCALATION is tried at most once regardless of failure pattern."""
+        report = _make_report(final_confidence=0.55)
+        prior_esc = ExecutionRecord(
+            strategy=Strategy.MODEL_ESCALATION,
+            timestamp="t",
+            outcome="escalation_scheduled",
+            confidence_before=0.55,
+            confidence_after=None,
+            strategy_metadata={},
+        )
+        decision = _plan(report, retry_count=2, max_retries=6, execution_history=[prior_esc])
+        assert decision.strategy != Strategy.MODEL_ESCALATION
 
 
 # ---------------------------------------------------------------------------

@@ -39,11 +39,12 @@ def _extract_once(
     doc_type: str,
     context: str | None = None,
     additional_instructions: str | None = None,
+    model_override: str | None = None,
 ) -> AgentResult:
     """Single open-extraction pass. Returns AgentResult for internal self-consistency use."""
     prompt = build_extraction_prompt(doc_type, context, additional_instructions)
     try:
-        raw = generate(prompt, image_bytes=content, mime_type=mime_type)
+        raw = generate(prompt, image_bytes=content, mime_type=mime_type, model=model_override)
         fields, confidence = _parse_envelope(raw, doc_type)
     except Exception as e:
         return AgentResult(success=False, confidence=0.0, data={}, reason=str(e))
@@ -57,15 +58,16 @@ def extract(
     context: str | None = None,
     retrieval_metadata: dict | None = None,
     additional_instructions: str | None = None,
+    model_override: str | None = None,
 ) -> ExtractionResult:
     """Extract all meaningful fields from the document.
 
     Applies self-consistency voting when extraction confidence is borderline.
-    additional_instructions, when provided, appends focused guidance from
-    PromptRefinementStrategy to the base prompt — used only on refined retry passes.
+    additional_instructions appends focused guidance (PROMPT_REFINEMENT) to the base prompt.
+    model_override uses a higher-tier model (MODEL_ESCALATION) for this pass only.
     Deterministic verification is NOT performed here — Phase 4 owns that.
     """
-    first = _extract_once(content, mime_type, doc_type, context, additional_instructions)
+    first = _extract_once(content, mime_type, doc_type, context, additional_instructions, model_override)
 
     if not first.success:
         return ExtractionResult(
@@ -88,7 +90,7 @@ def extract(
         )
 
     samples = [first] + [
-        _extract_once(content, mime_type, doc_type, context, additional_instructions)
+        _extract_once(content, mime_type, doc_type, context, additional_instructions, model_override)
         for _ in range(2)
     ]
     voted = vote(samples)
