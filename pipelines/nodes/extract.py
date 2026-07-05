@@ -62,7 +62,6 @@ def extract_node(state: GraphState) -> dict:
         "extract_confidence": result.overall_confidence,
         "extraction_result": result,
         "tool_call_count": 0,
-        "verification_passed": None,  # Phase 4 truth_engine_node will populate this
     }
     if not result.success:
         update["error"] = result.error

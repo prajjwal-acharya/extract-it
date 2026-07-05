@@ -7,6 +7,37 @@ import uuid
 from db.models import Document
 from io_pipeline.output_writer import write_output
 from pipelines.nodes.normalize import normalize_node
+from pipelines.resolution.models import ResolutionDecision, Strategy
+from pipelines.truth_engine.models import (
+    ExtractionResult,
+    FieldValidationReport,
+    PersistenceDecision,
+    TruthReport,
+)
+
+
+def _truth_report() -> TruthReport:
+    return TruthReport(
+        extraction=ExtractionResult(
+            fields={}, overall_confidence=0.99, context_used=False, sample_count=1
+        ),
+        field_validation=FieldValidationReport(
+            required_fields_present=[],
+            required_fields_missing=[],
+            additional_fields=[],
+            coverage_score=1.0,
+        ),
+        verification_reports=[],
+        final_confidence=0.99,
+        decision_reason="test",
+        persistence=PersistenceDecision(
+            document_status="completed",
+            allow_completion=True,
+            allow_embedding=True,
+            allow_learning=True,
+            reason="test",
+        ),
+    )
 
 
 def _passport_state(doc_id: str) -> dict:
@@ -26,6 +57,17 @@ def _passport_state(doc_id: str) -> dict:
         "error": None,
         "hitl_required": False,
         "hitl_approved": None,
+        "truth_report": _truth_report(),
+        "resolution_decision": ResolutionDecision(
+            strategy=Strategy.ACCEPT,
+            reason="test",
+            requires_human=False,
+            learning_candidate=True,
+        ),
+        "execution_history": [],
+        "hitl_correction": False,
+        "schema_version": None,
+        "schema_proposal": None,
     }
 
 

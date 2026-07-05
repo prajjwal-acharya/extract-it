@@ -27,8 +27,10 @@ def _parse_envelope(raw: str, doc_type: str) -> tuple[dict, float]:
         log.warning(
             "event=EnvelopeMissing doc_type=%s — treating flat response as fields", doc_type
         )
-        fields = {k: v for k, v in envelope.items() if k != "overall_confidence"}
-        confidence = float(envelope.get("overall_confidence", 0.9))
+        fields = {
+            k: v for k, v in envelope.items() if k not in ("overall_confidence", "confidence")
+        }
+        confidence = float(envelope.get("overall_confidence", envelope.get("confidence", 0.9)))
 
     return fields, confidence
 
