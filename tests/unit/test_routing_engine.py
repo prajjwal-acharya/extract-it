@@ -27,7 +27,7 @@ def _make_plan(**kwargs) -> RoutingPlan:
     defaults = dict(
         action=RoutingAction.PROCEED,
         document_type="passport",
-        schema_name="passport",
+        reference_schema_name="passport",
         extraction_prompt_key="passport",
         verifier_profile=entry.verifier_profile,
         retry_policy=entry.retry_policy,
@@ -50,7 +50,7 @@ def test_routing_plan_is_frozen() -> None:
 def test_routing_plan_carries_full_registry_fields() -> None:
     entry = registry.get("passport")
     plan = _make_plan()
-    assert plan.schema_name == entry.schema_name
+    assert plan.reference_schema_name == entry.reference_schema_name
     assert plan.extraction_prompt_key == entry.extraction_prompt_key
     assert plan.rag_namespace == entry.rag_namespace
     assert plan.verifier_profile == entry.verifier_profile
@@ -71,7 +71,7 @@ def test_all_supported_types_produce_complete_plan() -> None:
         result = AgentResult(success=True, confidence=0.95, data={"doc_type": entry.document_type})
         plan = RoutingEngine().route(result, entry.document_type)
         assert plan.document_type == entry.document_type
-        assert plan.schema_name == entry.schema_name
+        assert plan.reference_schema_name == entry.reference_schema_name
         assert plan.extraction_prompt_key == entry.extraction_prompt_key
         assert plan.rag_namespace == entry.rag_namespace
         assert plan.routing_version == ROUTING_VERSION
@@ -227,7 +227,7 @@ def test_routing_plan_contains_all_fields_needed_for_extraction() -> None:
     """All fields extract_node needs are in RoutingPlan — no registry lookup required."""
     result = AgentResult(success=True, confidence=0.9, data={"doc_type": "passport"})
     plan = RoutingEngine().route(result, "passport")
-    assert plan.schema_name  # used by schema_loader
+    assert plan.reference_schema_name  # identifies which reference schema Phase 3 compares against
     assert plan.extraction_prompt_key  # used by future prompt-versioning
     assert plan.rag_namespace  # used by vector retrieval
     assert plan.verifier_profile is not None  # used by verifier pass
@@ -308,7 +308,7 @@ def test_graph_route_unknown_to_unknown_handler() -> None:
     plan = RoutingPlan(
         action=RoutingAction.UNKNOWN,
         document_type="UNKNOWN",
-        schema_name=entry.schema_name,
+        reference_schema_name=entry.reference_schema_name,
         extraction_prompt_key=entry.extraction_prompt_key,
         verifier_profile=entry.verifier_profile,
         retry_policy=entry.retry_policy,
@@ -331,7 +331,7 @@ def test_graph_route_failure_to_unknown_handler() -> None:
     plan = RoutingPlan(
         action=RoutingAction.FAILURE,
         document_type="UNKNOWN",
-        schema_name=entry.schema_name,
+        reference_schema_name=entry.reference_schema_name,
         extraction_prompt_key=entry.extraction_prompt_key,
         verifier_profile=entry.verifier_profile,
         retry_policy=entry.retry_policy,

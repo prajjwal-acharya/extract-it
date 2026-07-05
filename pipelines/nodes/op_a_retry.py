@@ -80,14 +80,12 @@ def op_a_retry_node(state: GraphState) -> dict:
                 )
             )
 
-    # load_schema_model/load_universal_mapping re-query schema_versions internally,
-    # so extract() below transparently picks up any version bump made above.
     result = extract(raw_bytes, mime_type, doc_type, context=context)
-    validate_result = validate(doc_type, result.data)
+    validate_result = validate(doc_type, result.fields)
 
     return {
-        "extracted_fields": result.data,
-        "extract_confidence": result.confidence,
+        "extracted_fields": result.fields,
+        "extract_confidence": result.overall_confidence,
         "validation_issues": validate_result.data.get("issues", []),
         "validate_confidence": validate_result.confidence,
         "retry_count": state["retry_count"] + 1,

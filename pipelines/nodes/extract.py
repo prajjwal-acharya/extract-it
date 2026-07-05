@@ -8,7 +8,11 @@ from shared.utils.mime import mime_from_filename
 
 
 def extract_node(state: GraphState) -> dict:
-    """Run extract agent with RAG context from pgvector, return GraphState update."""
+    """Run open extraction with RAG context; return GraphState update.
+
+    Deterministic verification (tool_call_count, verification_passed) is no
+    longer performed here — Phase 4 owns that responsibility.
+    """
     doc_type = state.get("doc_type") or ""
     mime_type = mime_from_filename(state["filename"])
     document_id = state["document_id"]
@@ -22,6 +26,12 @@ def extract_node(state: GraphState) -> dict:
             doc_type=doc_type or None,
         )
         context = "\n".join(f"Example: {row.chunk_text}" for row, _ in similar) or None
+        retrieval_metadata = {
+            "retrieved_count": len(similar),
+            "doc_ids": [
+                row.document_id for row, _ in similar if row.document_id != document_id
+            ],
+        }
 
         for row, distance in similar:
             if row.document_id == document_id:
@@ -41,13 +51,20 @@ def extract_node(state: GraphState) -> dict:
     finally:
         session.close()
 
-    result = extract(state["raw_bytes"], mime_type, doc_type, context=context)
+    result = extract(
+        state["raw_bytes"],
+        mime_type,
+        doc_type,
+        context=context,
+        retrieval_metadata=retrieval_metadata,
+    )
+
     update: dict = {
-        "extracted_fields": result.data,
-        "extract_confidence": result.confidence,
-        "tool_call_count": result.tool_calls_made,
-        "verification_passed": result.verification_passed,
+        "extracted_fields": result.fields,
+        "extract_confidence": result.overall_confidence,
+        "tool_call_count": 0,       # Phase 4 will populate via VerifierRegistry
+        "verification_passed": None,  # Phase 4 will populate via VerificationReport
     }
     if not result.success:
-        update["error"] = result.reason
+        update["error"] = result.error
     return update

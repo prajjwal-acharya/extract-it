@@ -1,5 +1,7 @@
 import unittest.mock as mock
 
+import pytest
+
 from agents.base import AgentResult
 from agents.classify_agent import classify
 from agents.extract_agent import extract
@@ -28,30 +30,33 @@ def test_classify_confidence_is_between_zero_and_one(sample_pdf_bytes) -> None:
 
 def test_extract_returns_agent_result_for_passport(sample_pdf_bytes) -> None:
     passport_json = (
-        '{"surname": "SMITH", "given_names": "JOHN", "nationality": "GBR", '
+        '{"fields": {"surname": "SMITH", "given_names": "JOHN", "nationality": "GBR", '
         '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
         '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
-        '"passport_number": "P1234567", "mrz_line1": null, "mrz_line2": null, '
-        '"confidence": 0.91}'
+        '"passport_number": "P1234567", "mrz_line1": null, "mrz_line2": null}, '
+        '"overall_confidence": 0.91}'
     )
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
     with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")
-    assert isinstance(result, AgentResult)
+    from pipelines.truth_engine.models import ExtractionResult
+
+    assert isinstance(result, ExtractionResult)
     assert result.success is True
-    assert result.data.get("surname") == "SMITH"
-    assert "confidence" not in result.data
+    assert result.fields.get("surname") == "SMITH"
+    assert "overall_confidence" not in result.fields
+    assert result.overall_confidence == pytest.approx(0.91)
 
 
 def test_extract_accepts_optional_context_param(sample_pdf_bytes) -> None:
     passport_json = (
-        '{"surname": "JONES", "given_names": "ALICE", "nationality": "GBR", '
+        '{"fields": {"surname": "JONES", "given_names": "ALICE", "nationality": "GBR", '
         '"date_of_birth": "1985-06-15", "sex": "F", "place_of_birth": null, '
         '"date_of_issue": "2019-01-01", "date_of_expiry": "2029-01-01", '
-        '"passport_number": "P9876543", "mrz_line1": null, "mrz_line2": null, '
-        '"confidence": 0.88}'
+        '"passport_number": "P9876543", "mrz_line1": null, "mrz_line2": null}, '
+        '"overall_confidence": 0.88}'
     )
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
@@ -74,14 +79,19 @@ def test_extract_accepts_optional_context_param(sample_pdf_bytes) -> None:
         )
 
     assert result.success is True
-    assert result.data.get("surname") == "JONES"
+    assert result.fields.get("surname") == "JONES"
 
 
-def test_extract_returns_failure_for_unknown_doc_type(sample_pdf_bytes) -> None:
-    result = extract(sample_pdf_bytes, "application/pdf", "nonexistent_type")
-    assert result.success is False
-    assert result.confidence == 0.0
-    assert "nonexistent_type" in (result.reason or "")
+def test_extract_proceeds_for_unregistered_doc_type(sample_pdf_bytes) -> None:
+    # Open extraction: doc_type no longer gates on a schema file.
+    open_json = '{"fields": {"full_name": "ALI HASSAN", "id_number": "X12345", "issued_country": "OM"}, "overall_confidence": 0.9}'
+    mock_response = mock.MagicMock()
+    mock_response.text = open_json
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
+        mock_client_fn.return_value.models.generate_content.return_value = mock_response
+        result = extract(sample_pdf_bytes, "application/pdf", "nonexistent_type")
+    assert result.success is True
+    assert result.fields.get("full_name") == "ALI HASSAN"
 
 
 def test_validate_returns_issues_for_invalid_fields() -> None:
@@ -187,7 +197,7 @@ def test_balance_arithmetic_within_tolerance() -> None:
 
 def test_extract_tool_call_ceiling(sample_pdf_bytes) -> None:
     """generate_with_tools must not exceed MAX_TOOL_CALLS even if the model keeps requesting tools."""
-    from agents.extract_agent import MAX_TOOL_CALLS
+    from pipelines.truth_engine.verifier_registry import MAX_TOOL_CALLS
     from agents.llm_client import generate_with_tools
     from google.genai import types
 
@@ -295,38 +305,6 @@ def test_generate_with_tools_returns_tool_results() -> None:
     assert "valid" in tool_results[0]["result"]
 
 
-def test_extract_sets_verification_passed_false_on_checksum_failure(sample_pdf_bytes) -> None:
-    """extract() sets verification_passed=False when a verifier returns valid=False."""
-    from agents.extract_agent import extract
-
-    passport_json = (
-        '{"surname": "SMITH", "given_names": "JOHN", "nationality": "GBR", '
-        '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
-        '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
-        '"passport_number": "P1234567", "mrz_line1": "ABCDEF", "mrz_line2": null, '
-        '"confidence": 0.91}'
-    )
-    mock_response = mock.MagicMock()
-    mock_response.text = passport_json
-
-    failing_tool_results = [
-        {"name": "mrz_checksum", "result": {"valid": False, "expected": 4, "got": 9}}
-    ]
-
-    with (
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch(
-            "agents.extract_agent.generate_with_tools", return_value=("", 1, failing_tool_results)
-        ),
-    ):
-        mock_client_fn.return_value.models.generate_content.return_value = mock_response
-        result = extract(sample_pdf_bytes, "application/pdf", "passport")
-
-    assert result.success is True
-    assert result.verification_passed is False
-    assert result.tool_calls_made == 1
-
-
 # ── Self-consistency voting unit tests ──────────────────────────────────────
 
 
@@ -393,69 +371,57 @@ def test_should_vote_gate_boundaries() -> None:
 def test_extract_triggers_self_consistency_in_borderline_band(sample_pdf_bytes) -> None:
     """extract() calls _extract_once 3 times when confidence is in [0.6, 0.85)."""
     passport_json = (
-        '{"surname": "BORDER", "given_names": "LINE", "nationality": "USA", '
+        '{"fields": {"surname": "BORDER", "given_names": "LINE", "nationality": "USA", '
         '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
         '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
-        '"passport_number": "B0000001", "mrz_line1": null, "mrz_line2": null, '
-        '"confidence": 0.72}'
+        '"passport_number": "B0000001", "mrz_line1": null, "mrz_line2": null}, '
+        '"overall_confidence": 0.72}'
     )
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with (
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 0, [])),
-    ):
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")
 
     assert result.success is True
-    # 3 extraction calls × 1 generate_content each = 3; verifier is separately mocked
+    assert result.sample_count == 3
     assert mock_client_fn.return_value.models.generate_content.call_count == 3
 
 
 def test_extract_skips_self_consistency_above_band(sample_pdf_bytes) -> None:
     """extract() calls _extract_once exactly once when confidence >= 0.85."""
     passport_json = (
-        '{"surname": "HIGH", "given_names": "CONF", "nationality": "GBR", '
+        '{"fields": {"surname": "HIGH", "given_names": "CONF", "nationality": "GBR", '
         '"date_of_birth": "1990-01-01", "sex": "M", "place_of_birth": null, '
         '"date_of_issue": "2020-01-01", "date_of_expiry": "2030-01-01", '
-        '"passport_number": "H0000001", "mrz_line1": null, "mrz_line2": null, '
-        '"confidence": 0.91}'
+        '"passport_number": "H0000001", "mrz_line1": null, "mrz_line2": null}, '
+        '"overall_confidence": 0.91}'
     )
     mock_response = mock.MagicMock()
     mock_response.text = passport_json
 
-    with (
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch("agents.extract_agent.generate_with_tools", return_value=("", 0, [])),
-    ):
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "passport")
 
     assert result.success is True
+    assert result.sample_count == 1
     assert mock_client_fn.return_value.models.generate_content.call_count == 1
 
 
-def test_extract_verification_passed_none_when_not_verifiable_doc_type(sample_pdf_bytes) -> None:
-    """extract() leaves verification_passed=None for doc_types outside _VERIFIABLE."""
+def test_extract_returns_extraction_result_not_agent_result(sample_pdf_bytes) -> None:
+    """extract() returns ExtractionResult — verification has moved to Phase 4."""
     from agents.extract_agent import extract
+    from pipelines.truth_engine.models import ExtractionResult
 
-    # Use a doc_type not in _VERIFIABLE — mock schema loader to avoid FileNotFoundError
-    mock_model = mock.MagicMock()
-    mock_model.model_fields = {"amount": mock.MagicMock(), "confidence": mock.MagicMock()}
-    mock_model.model_validate_json.return_value = mock.MagicMock(confidence=0.7, amount=100)
-    mock_model.model_validate_json.return_value.model_dump.return_value = {"amount": 100}
-
-    with (
-        mock.patch("agents.extract_agent.load_schema_model", return_value=mock_model),
-        mock.patch("agents.llm_client._client") as mock_client_fn,
-        mock.patch("agents.extract_agent.generate_with_tools") as mock_gwt,
-    ):
-        mock_response = mock.MagicMock()
-        mock_response.text = '{"amount": 100, "confidence": 0.7}'
+    mock_response = mock.MagicMock()
+    mock_response.text = '{"fields": {"amount": 100, "currency": "USD"}, "overall_confidence": 0.9}'
+    with mock.patch("agents.llm_client._client") as mock_client_fn:
         mock_client_fn.return_value.models.generate_content.return_value = mock_response
         result = extract(sample_pdf_bytes, "application/pdf", "invoice")
 
-    mock_gwt.assert_not_called()
-    assert result.verification_passed is None
+    assert isinstance(result, ExtractionResult)
+    assert not hasattr(result, "verification_passed")
+    assert not hasattr(result, "tool_calls_made")
+    assert result.fields["amount"] == 100

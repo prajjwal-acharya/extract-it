@@ -42,7 +42,7 @@ class RoutingPlan:
 
     action: RoutingAction
     document_type: str
-    schema_name: str
+    reference_schema_name: str
     extraction_prompt_key: str
     verifier_profile: tuple[str, ...]
     retry_policy: RetryPolicy
@@ -72,7 +72,7 @@ def _plan_from_entry(
     return RoutingPlan(
         action=action,
         document_type=entry.document_type,
-        schema_name=entry.schema_name,
+        reference_schema_name=entry.reference_schema_name,
         extraction_prompt_key=entry.extraction_prompt_key,
         verifier_profile=entry.verifier_profile,
         retry_policy=entry.retry_policy,
@@ -154,11 +154,11 @@ class RoutingEngine:
     def _log(plan: RoutingPlan, elapsed: float) -> None:
         log.info(
             "event=RoutingDecision routing_version=%s action=%s doc_type=%s "
-            "schema=%s confidence=%.3f reason=%s elapsed=%.4fs",
+            "reference_schema=%s confidence=%.3f reason=%s elapsed=%.4fs",
             plan.routing_version,
             plan.action.value,
             plan.document_type,
-            plan.schema_name,
+            plan.reference_schema_name,
             plan.confidence,
             plan.reason,
             elapsed,

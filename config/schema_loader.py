@@ -70,6 +70,25 @@ def _load_active_row(doc_type: str) -> SchemaVersion | None:
         return None
 
 
+def load_reference_fields(doc_type: str) -> tuple[list[str], list[str]]:
+    """Return (required_fields, optional_fields) for doc_type (DB-first, YAML fallback).
+
+    Returns ([], []) when no reference schema exists — callers should still produce
+    an open extraction prompt, just without specific field guidance.
+    """
+    row = _load_active_row(doc_type)
+    if row is not None:
+        fields = row.fields_json
+    else:
+        try:
+            fields = _load_yaml_raw(doc_type).get("fields", [])
+        except FileNotFoundError:
+            return [], []
+    required = [f["name"] for f in fields if f.get("required", True)]
+    optional = [f["name"] for f in fields if not f.get("required", True)]
+    return required, optional
+
+
 def load_universal_mapping(doc_type: str) -> dict:
     """Return the active universal_mapping for doc_type (DB-first, YAML fallback)."""
     row = _load_active_row(doc_type)

@@ -1,121 +1,91 @@
 import json
 import logging
 
-from google.genai import types
-
 from agents.base import AgentResult
-from agents.llm_client import generate, generate_with_tools
+from agents.llm_client import generate
+from agents.prompt_builder import build_extraction_prompt
 from agents.self_consistency import should_vote, vote
-from agents.verifiers import balance_arithmetic, mrz_checksum
-from config.schema_loader import load_schema_model
-from pipelines.registry import registry as _registry
+from pipelines.truth_engine.models import ExtractionResult
 
 log = logging.getLogger(__name__)
 
-MAX_TOOL_CALLS = 3
 
-# FunctionDeclaration objects built once at import time.
-_VERIFIER_DECLARATIONS = [
-    types.FunctionDeclaration(
-        name="mrz_checksum",
-        description="Verify an MRZ field check digit per ICAO 9303",
-        parameters=types.Schema(
-            type=types.Type.OBJECT,
-            properties={
-                "mrz_string": types.Schema(
-                    type=types.Type.STRING, description="Field string excluding check digit"
-                ),
-                "check_digit": types.Schema(
-                    type=types.Type.INTEGER, description="Check digit (0-9) as integer"
-                ),
-            },
-            required=["mrz_string", "check_digit"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="balance_arithmetic",
-        description="Verify opening + sum(transactions) ≈ closing balance (±0.01)",
-        parameters=types.Schema(
-            type=types.Type.OBJECT,
-            properties={
-                "opening": types.Schema(type=types.Type.NUMBER, description="Opening balance"),
-                "closing": types.Schema(type=types.Type.NUMBER, description="Closing balance"),
-                "transactions": types.Schema(
-                    type=types.Type.ARRAY,
-                    items=types.Schema(type=types.Type.NUMBER),
-                    description="Transaction amounts (positive=credit, negative=debit)",
-                ),
-            },
-            required=["opening", "closing", "transactions"],
-        ),
-    ),
-]
+def _parse_envelope(raw: str, doc_type: str) -> tuple[dict, float]:
+    """Parse the extraction envelope {fields: {...}, overall_confidence: float}.
 
-_VERIFIER_REGISTRY = {"mrz_checksum": mrz_checksum, "balance_arithmetic": balance_arithmetic}
+    Falls back gracefully when Gemini returns a flat dict instead of the envelope —
+    the whole dict is treated as fields and confidence defaults to 0.9.
+    """
+    envelope = json.loads(raw)
+    if not isinstance(envelope, dict):
+        raise ValueError("extraction response is not a JSON object")
 
-# Derived from registry — any entry with a non-empty verifier_profile gets a verification pass.
-_VERIFIABLE = frozenset(e.document_type for e in _registry.all() if e.verifier_profile)
+    fields = envelope.get("fields")
+    if isinstance(fields, dict):
+        confidence = float(envelope.get("overall_confidence", 0.9))
+    else:
+        log.warning(
+            "event=EnvelopeMissing doc_type=%s — treating flat response as fields", doc_type
+        )
+        fields = {k: v for k, v in envelope.items() if k != "overall_confidence"}
+        confidence = float(envelope.get("overall_confidence", 0.9))
+
+    return fields, confidence
 
 
 def _extract_once(
     content: bytes, mime_type: str, doc_type: str, context: str | None = None
 ) -> AgentResult:
-    """Single extraction pass — no self-consistency logic."""
+    """Single open-extraction pass. Returns AgentResult for internal self-consistency use."""
+    prompt = build_extraction_prompt(doc_type, context)
     try:
-        model = load_schema_model(_registry.schema_name(doc_type))
-    except FileNotFoundError as e:
-        return AgentResult(success=False, confidence=0.0, data={}, reason=str(e))
-
-    fields = [f for f in model.model_fields if f != "confidence"]
-    prompt = f"Extract these fields from the document as JSON: {fields}"
-    if context:
-        prompt = f"{context}\n\n{prompt}"
-
-    try:
-        raw = generate(prompt, image_bytes=content, mime_type=mime_type, response_schema=model)
-        parsed = model.model_validate_json(raw)
-        extracted = parsed.model_dump(exclude={"confidence"})
-        confidence = float(getattr(parsed, "confidence", 0.0))
+        raw = generate(prompt, image_bytes=content, mime_type=mime_type)
+        fields, confidence = _parse_envelope(raw, doc_type)
     except Exception as e:
         return AgentResult(success=False, confidence=0.0, data={}, reason=str(e))
-
-    # Verification pass: let the LLM call verifiers to confirm field consistency.
-    tool_calls_made = 0
-    verification_passed: bool | None = None
-    if doc_type in _VERIFIABLE and extracted:
-        verify_prompt = (
-            f"Verify the extracted {doc_type} fields using the available tools. "
-            f"Fields: {json.dumps(extracted)}"
-        )
-        try:
-            _, tool_calls_made, tool_results = generate_with_tools(
-                verify_prompt,
-                declarations=_VERIFIER_DECLARATIONS,
-                fn_registry=_VERIFIER_REGISTRY,
-                max_tool_calls=MAX_TOOL_CALLS,
-            )
-            if tool_results:
-                verification_passed = all(r["result"].get("valid", True) for r in tool_results)
-        except Exception as e:
-            log.warning("verifier pass failed for doc_type=%s: %s", doc_type, e)
-
-    return AgentResult(
-        success=True,
-        confidence=confidence,
-        data=extracted,
-        tool_calls_made=tool_calls_made,
-        verification_passed=verification_passed,
-    )
+    return AgentResult(success=True, confidence=confidence, data=fields)
 
 
 def extract(
-    content: bytes, mime_type: str, doc_type: str, context: str | None = None
-) -> AgentResult:
-    """Extract structured fields, applying self-consistency voting if confidence is borderline."""
+    content: bytes,
+    mime_type: str,
+    doc_type: str,
+    context: str | None = None,
+    retrieval_metadata: dict | None = None,
+) -> ExtractionResult:
+    """Extract all meaningful fields from the document.
+
+    Applies self-consistency voting when extraction confidence is borderline.
+    Deterministic verification is NOT performed here — that is Phase 4's responsibility.
+    """
     first = _extract_once(content, mime_type, doc_type, context)
 
+    if not first.success:
+        return ExtractionResult(
+            fields={},
+            overall_confidence=0.0,
+            context_used=context is not None,
+            sample_count=1,
+            retrieval_metadata=retrieval_metadata,
+            success=False,
+            error=first.reason,
+        )
+
     if not should_vote(first.confidence):
-        return first
+        return ExtractionResult(
+            fields=first.data,
+            overall_confidence=first.confidence,
+            context_used=context is not None,
+            sample_count=1,
+            retrieval_metadata=retrieval_metadata,
+        )
 
     samples = [first] + [_extract_once(content, mime_type, doc_type, context) for _ in range(2)]
-    return vote(samples)
+    voted = vote(samples)
+    return ExtractionResult(
+        fields=voted.data,
+        overall_confidence=voted.confidence,
+        context_used=context is not None,
+        sample_count=len(samples),
+        retrieval_metadata=retrieval_metadata,
+    )

@@ -13,7 +13,7 @@ def validate(doc_type: str, extracted_fields: dict) -> AgentResult:
     No LLM call — deterministic, cheap, reuses the already-built schema model.
     """
     try:
-        model = load_schema_model(_registry.schema_name(doc_type))
+        model = load_schema_model(_registry.reference_schema_name(doc_type))
     except FileNotFoundError as e:
         return AgentResult(success=False, confidence=0.0, data={"issues": [str(e)]}, reason=str(e))
 

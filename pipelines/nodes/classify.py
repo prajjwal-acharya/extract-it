@@ -33,12 +33,12 @@ def classify_node(state: GraphState) -> dict:
     elapsed = time.monotonic() - t0
     log.info(
         "event=ClassificationComplete document_id=%s routing_version=%s action=%s "
-        "doc_type=%s schema=%s confidence=%.3f reason=%s elapsed=%.3fs",
+        "doc_type=%s reference_schema=%s confidence=%.3f reason=%s elapsed=%.3fs",
         state.get("document_id"),
         plan.routing_version,
         plan.action.value,
         plan.document_type,
-        plan.schema_name,
+        plan.reference_schema_name,
         plan.confidence,
         plan.reason,
         elapsed,

@@ -37,7 +37,7 @@ class ConfidencePolicy:
 @dataclass(frozen=True)
 class RegistryEntry:
     document_type: str
-    schema_name: str
+    reference_schema_name: str
     extraction_prompt_key: str
     verifier_profile: tuple[str, ...]
     retry_policy: RetryPolicy
@@ -75,16 +75,16 @@ class DocumentRegistry:
     def all(self) -> list[RegistryEntry]:
         return list(self._index.values())
 
-    def schema_name(self, doc_type: str) -> str:
-        """Return schema_name for doc_type, falling back to doc_type itself if not registered."""
-        return self._index[doc_type].schema_name if doc_type in self._index else doc_type
+    def reference_schema_name(self, doc_type: str) -> str:
+        """Return reference_schema_name for doc_type, falling back to doc_type itself if not registered."""
+        return self._index[doc_type].reference_schema_name if doc_type in self._index else doc_type
 
 
 registry = DocumentRegistry(
     [
         RegistryEntry(
             document_type="passport",
-            schema_name="passport",
+            reference_schema_name="passport",
             extraction_prompt_key="passport",
             verifier_profile=("mrz_checksum",),
             retry_policy=_DEFAULT_RETRY,
@@ -93,7 +93,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="bank_statement",
-            schema_name="bank_statement",
+            reference_schema_name="bank_statement",
             extraction_prompt_key="bank_statement",
             verifier_profile=("balance_arithmetic",),
             retry_policy=_DEFAULT_RETRY,
@@ -102,7 +102,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="salary_slip",
-            schema_name="salary_slip",
+            reference_schema_name="salary_slip",
             extraction_prompt_key="salary_slip",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,
@@ -111,7 +111,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="itr",
-            schema_name="itr",
+            reference_schema_name="itr",
             extraction_prompt_key="itr",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,
@@ -120,7 +120,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="gst_invoice",
-            schema_name="gst_invoice",
+            reference_schema_name="gst_invoice",
             extraction_prompt_key="gst_invoice",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,
@@ -129,7 +129,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="property_deed",
-            schema_name="property_deed",
+            reference_schema_name="property_deed",
             extraction_prompt_key="property_deed",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,
@@ -138,7 +138,7 @@ registry = DocumentRegistry(
         ),
         RegistryEntry(
             document_type="UNKNOWN",
-            schema_name="unknown",
+            reference_schema_name="unknown",
             extraction_prompt_key="unknown",
             verifier_profile=(),
             retry_policy=_DEFAULT_RETRY,

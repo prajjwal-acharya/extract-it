@@ -24,14 +24,14 @@ _SCHEMA_DIR = Path(__file__).parent.parent.parent / "config" / "schemas"
 def test_registry_lookup_known_type() -> None:
     entry = registry.get("passport")
     assert entry.document_type == "passport"
-    assert entry.schema_name == "passport"
+    assert entry.reference_schema_name == "passport"
     assert entry.rag_namespace == "passport"
 
 
 def test_registry_lookup_gst_invoice() -> None:
     entry = registry.get("gst_invoice")
     assert entry.document_type == "gst_invoice"
-    assert entry.schema_name == "gst_invoice"
+    assert entry.reference_schema_name == "gst_invoice"
 
 
 def test_registry_lookup_unknown_raises_key_error() -> None:
@@ -91,7 +91,7 @@ def test_registry_all_contains_every_type() -> None:
 def test_unknown_has_registry_entry() -> None:
     entry = registry.get("UNKNOWN")
     assert entry.document_type == "UNKNOWN"
-    assert entry.schema_name == "unknown"
+    assert entry.reference_schema_name == "unknown"
     assert isinstance(entry.retry_policy, RetryPolicy)
     assert isinstance(entry.confidence_policy, ConfidencePolicy)
 
@@ -129,7 +129,7 @@ def test_non_verifiable_types_have_empty_profile() -> None:
 def test_duplicate_keys_raise_value_error() -> None:
     entry = RegistryEntry(
         document_type="passport",
-        schema_name="passport",
+        reference_schema_name="passport",
         extraction_prompt_key="passport",
         verifier_profile=(),
         retry_policy=RetryPolicy(),
@@ -147,7 +147,7 @@ def test_duplicate_keys_raise_value_error() -> None:
 
 def test_registry_completeness() -> None:
     schema_names = {p.stem for p in _SCHEMA_DIR.glob("*.yaml")}
-    registry_schema_names = {e.schema_name for e in registry.all()}
+    registry_schema_names = {e.reference_schema_name for e in registry.all()}
     missing_from_registry = schema_names - registry_schema_names
     missing_schema_file = registry_schema_names - schema_names
     assert not missing_from_registry, (
@@ -157,16 +157,16 @@ def test_registry_completeness() -> None:
 
 
 # ---------------------------------------------------------------------------
-# schema_name helper
+# reference_schema_name helper
 # ---------------------------------------------------------------------------
 
 
-def test_schema_name_resolves_unknown() -> None:
-    assert registry.schema_name("UNKNOWN") == "unknown"
+def test_reference_schema_name_resolves_unknown() -> None:
+    assert registry.reference_schema_name("UNKNOWN") == "unknown"
 
 
-def test_schema_name_falls_back_for_unregistered_type() -> None:
-    assert registry.schema_name("not_in_registry") == "not_in_registry"
+def test_reference_schema_name_falls_back_for_unregistered_type() -> None:
+    assert registry.reference_schema_name("not_in_registry") == "not_in_registry"
 
 
 # ---------------------------------------------------------------------------

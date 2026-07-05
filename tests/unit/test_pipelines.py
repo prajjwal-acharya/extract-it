@@ -109,8 +109,9 @@ def test_route_after_hitl_rejection_goes_to_persist() -> None:
 
 
 def test_op_a_retry_increments_retry_count() -> None:
-    from agents.base import AgentResult
     from pipelines.nodes.op_a_retry import op_a_retry_node
+    from pipelines.truth_engine.models import ExtractionResult
+    from agents.base import AgentResult
 
     state: GraphState = {  # type: ignore[typeddict-item]
         "document_id": "test-id",
@@ -121,7 +122,9 @@ def test_op_a_retry_increments_retry_count() -> None:
         "extracted_fields": {"surname": "SMITH"},
         "retry_count": 0,
     }
-    fake_result = AgentResult(success=True, confidence=0.9, data={"surname": "SMITH"})
+    fake_result = ExtractionResult(
+        fields={"surname": "SMITH"}, overall_confidence=0.9, context_used=False, sample_count=1
+    )
     fake_validate = AgentResult(success=True, confidence=0.9, data={"issues": []})
 
     with (
@@ -137,9 +140,10 @@ def test_op_a_retry_increments_retry_count() -> None:
 
 
 def test_op_a_retry_uses_similarity_search_context() -> None:
-    from agents.base import AgentResult
     from db.models import DocumentEmbedding
     from pipelines.nodes.op_a_retry import op_a_retry_node
+    from pipelines.truth_engine.models import ExtractionResult
+    from agents.base import AgentResult
 
     state: GraphState = {  # type: ignore[typeddict-item]
         "document_id": "test-id",
@@ -154,12 +158,14 @@ def test_op_a_retry_uses_similarity_search_context() -> None:
     mock_row = mock.MagicMock(spec=DocumentEmbedding)
     mock_row.chunk_text = '{"surname": "EXAMPLE"}'
     mock_row.document_id = "other-doc-id"
-    fake_result = AgentResult(success=True, confidence=0.95, data={"surname": "SMITH"})
+    fake_result = ExtractionResult(
+        fields={"surname": "SMITH"}, overall_confidence=0.95, context_used=True, sample_count=1
+    )
     fake_validate = AgentResult(success=True, confidence=0.95, data={"issues": []})
 
     captured: dict = {}
 
-    def capture_extract(content, mime_type, doc_type, context=None):
+    def capture_extract(content, mime_type, doc_type, context=None, **kwargs):
         captured["context"] = context
         return fake_result
 
@@ -231,9 +237,9 @@ def test_build_graph_returns_state_graph() -> None:
 
 def test_extract_node_passes_rag_context_to_extract() -> None:
     """extract_node should retrieve similar embeddings and forward context= to extract()."""
-    from agents.base import AgentResult
     from db.models import DocumentEmbedding
     from pipelines.nodes.extract import extract_node
+    from pipelines.truth_engine.models import ExtractionResult
 
     state: GraphState = {  # type: ignore[typeddict-item]
         "document_id": "test-id",
@@ -246,11 +252,13 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
     mock_row = mock.MagicMock(spec=DocumentEmbedding)
     mock_row.chunk_text = '{"surname": "EXAMPLE"}'
     mock_row.document_id = "other-doc-id"
-    fake_result = AgentResult(success=True, confidence=0.9, data={"surname": "EXAMPLE"})
+    fake_result = ExtractionResult(
+        fields={"surname": "EXAMPLE"}, overall_confidence=0.9, context_used=True, sample_count=1
+    )
 
     captured: dict = {}
 
-    def capture_extract(content, mime_type, doc_type, context=None):
+    def capture_extract(content, mime_type, doc_type, context=None, **kwargs):
         captured["context"] = context
         return fake_result
 
@@ -270,8 +278,8 @@ def test_extract_node_passes_rag_context_to_extract() -> None:
 
 def test_extract_node_no_context_when_no_similar_docs() -> None:
     """extract_node should pass context=None when similarity_search returns empty."""
-    from agents.base import AgentResult
     from pipelines.nodes.extract import extract_node
+    from pipelines.truth_engine.models import ExtractionResult
 
     state: GraphState = {  # type: ignore[typeddict-item]
         "document_id": "test-id",
@@ -281,10 +289,12 @@ def test_extract_node_no_context_when_no_similar_docs() -> None:
         "raw_bytes": b"%PDF stub",
     }
 
-    fake_result = AgentResult(success=True, confidence=0.8, data={"balance": 500.0})
+    fake_result = ExtractionResult(
+        fields={"balance": 500.0}, overall_confidence=0.8, context_used=False, sample_count=1
+    )
     captured: dict = {}
 
-    def capture_extract(content, mime_type, doc_type, context=None):
+    def capture_extract(content, mime_type, doc_type, context=None, **kwargs):
         captured["context"] = context
         return fake_result
 
