@@ -739,13 +739,16 @@ def test_truth_engine_node_fallback_reconstruction_when_no_extraction_result() -
     """truth_engine_node reconstructs ExtractionResult from flat state fields when needed."""
     from pipelines.nodes.truth_engine import truth_engine_node
 
-    state = cast(GraphState, {
-        "doc_type": "passport",
-        "classify_confidence": 0.8,
-        "extraction_result": None,
-        "extracted_fields": {"surname": "SMITH"},
-        "extract_confidence": 0.75,
-    })
+    state = cast(
+        GraphState,
+        {
+            "doc_type": "passport",
+            "classify_confidence": 0.8,
+            "extraction_result": None,
+            "extracted_fields": {"surname": "SMITH"},
+            "extract_confidence": 0.75,
+        },
+    )
     result = truth_engine_node(state)
     report: TruthReport = result["truth_report"]
     assert report.extraction.fields == {"surname": "SMITH"}
@@ -1207,16 +1210,19 @@ def test_output_writer_logs_truth_engine_confidence(minio_client, postgres_sessi
     postgres_session.commit()
 
     truth_report = _make_truth_report_for_status(final_confidence=0.88)
-    state = cast(GraphState, {
-        "document_id": doc_id,
-        "universal_schema": {},
-        "classify_confidence": 0.9,
-        "extract_confidence": 0.85,
-        "truth_report": truth_report,
-        "error": None,
-        "hitl_required": False,
-        "hitl_approved": None,
-    })
+    state = cast(
+        GraphState,
+        {
+            "document_id": doc_id,
+            "universal_schema": {},
+            "classify_confidence": 0.9,
+            "extract_confidence": 0.85,
+            "truth_report": truth_report,
+            "error": None,
+            "hitl_required": False,
+            "hitl_approved": None,
+        },
+    )
     with (
         mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
@@ -1297,16 +1303,19 @@ def test_verifier_version_in_truth_audit_log(minio_client, postgres_session) -> 
     te_result = truth_engine_node(te_state)
     truth_report = te_result["truth_report"]
 
-    state = cast(GraphState, {
-        "document_id": doc_id,
-        "universal_schema": {},
-        "classify_confidence": 0.95,
-        "extract_confidence": 0.88,
-        "truth_report": truth_report,
-        "error": None,
-        "hitl_required": False,
-        "hitl_approved": None,
-    })
+    state = cast(
+        GraphState,
+        {
+            "document_id": doc_id,
+            "universal_schema": {},
+            "classify_confidence": 0.95,
+            "extract_confidence": 0.88,
+            "truth_report": truth_report,
+            "error": None,
+            "hitl_required": False,
+            "hitl_approved": None,
+        },
+    )
     with (
         mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
@@ -1342,16 +1351,19 @@ def test_truth_audit_log_serializes_verification_reports(minio_client, postgres_
     postgres_session.commit()
 
     truth_report = _make_truth_report_for_status(final_confidence=0.90)
-    state = cast(GraphState, {
-        "document_id": doc_id,
-        "universal_schema": {},
-        "classify_confidence": 0.9,
-        "extract_confidence": 0.88,
-        "truth_report": truth_report,
-        "error": None,
-        "hitl_required": False,
-        "hitl_approved": None,
-    })
+    state = cast(
+        GraphState,
+        {
+            "document_id": doc_id,
+            "universal_schema": {},
+            "classify_confidence": 0.9,
+            "extract_confidence": 0.88,
+            "truth_report": truth_report,
+            "error": None,
+            "hitl_required": False,
+            "hitl_approved": None,
+        },
+    )
     with (
         mock.patch("io_pipeline.output_writer.get_session", return_value=postgres_session),
         mock.patch("io_pipeline.output_writer.get_object_store", return_value=minio_client),
