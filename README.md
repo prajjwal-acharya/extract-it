@@ -1,12 +1,13 @@
-# doc-intel-platform
+# extract-it
 
-Autonomous document intelligence platform that ingests unstructured documents
-(PDFs, images), classifies them, extracts structured fields via a multi-agent
-LangGraph pipeline, validates output with deterministic verifiers, and exposes
-results through a REST API and a multipage Streamlit dashboard with HITL review.
+Autonomous document intelligence platform. Ingests unstructured documents (PDFs,
+images), classifies them, extracts structured fields via a multi-agent LangGraph
+pipeline with deterministic verification, validates output, and exposes results
+through a REST API and a 7-page Streamlit dashboard with HITL review.
 
-→ Full architecture with data-flow diagrams and design decisions: [ARCHITECTURE.md](ARCHITECTURE.md)  
-→ Step-by-step setup and daily operations: [STARTUP.md](STARTUP.md)
+→ Full architecture with data-flow diagrams and design decisions: [architecture/architecture.md](architecture/architecture.md)  
+→ Step-by-step setup and daily operations: [STARTUP.md](STARTUP.md)  
+→ Per-phase architecture docs: [architecture/](architecture/)
 
 ## Quick-start
 
@@ -25,7 +26,7 @@ Open the dashboard at **http://localhost:8501** and the API docs at **http://loc
 |---|---|---|
 | API | http://localhost:8000 | REST endpoints |
 | API docs | http://localhost:8000/docs | Swagger UI (auto-generated) |
-| Dashboard | http://localhost:8501 | Multipage Streamlit app |
+| Dashboard | http://localhost:8501 | 7-page Streamlit app |
 | MinIO console | http://localhost:9001 | `minioadmin` / `minioadmin` |
 | Postgres | `localhost:5432` | DB `docint`, user `user`, pass `password` |
 
@@ -40,7 +41,7 @@ Open the dashboard at **http://localhost:8501** and the API docs at **http://loc
 | `GET` | `/documents/{id}/references` | — | RAG retrieval edges for this document |
 | `GET` | `/documents/{id}/similar` | — | Top-k semantically similar documents (pgvector cosine) |
 | `GET` | `/documents/{id}/timeline` | — | Ordered execution events with timestamps, duration, and retry labeling |
-| `GET` | `/documents/{id}/explain` | — | Human-readable extraction explanation: verifiers, field coverage, learning action |
+| `GET` | `/documents/{id}/explain` | — | Human-readable explanation: verifiers, field coverage, learning action |
 | `GET` | `/knowledge-graph/` | — | Node/edge graph payload for the most recent `limit` documents |
 | `POST` | `/search/` | — | Semantic search: `{query, doc_type?, top_k}` → ranked results with excerpts |
 | `GET` | `/analytics/` | — | Aggregate metrics: acceptance rate, HITL rate, retry rate, verifier failures, avg confidence |
@@ -53,12 +54,25 @@ Open the dashboard at **http://localhost:8501** and the API docs at **http://loc
 
 ## Pipeline
 
+Actual graph topology (from `pipelines/graph.py`):
+
 ```
-master → classify → extract → validate
-                                  │
-              confidence ≥ 0.85 ──► normalize → persist (atomic) → END
-              retry available   ──► op_a_retry (schema diff + RAG) → validate
-              retries exhausted ──► op_b_hitl (human review) → normalize | persist
+master → classify ──[route]──► extract         (PROCEED: confidence ≥ 0.70)
+                             ► unknown_handler → persist → END
+
+extract → truth_engine → resolution_planner → strategy_executor
+                                                      │
+              ┌──────────────────────────────────────┤
+          ACCEPT                            RETRY / PROMPT_REFINEMENT /    HITL
+       (normalize)                          BETTER_RETRIEVAL /        (op_b_hitl)
+                                            IMAGE_PREPROCESS /
+                                            MODEL_ESCALATION
+                                            (op_a_retry → truth_engine ← retry loop)
+
+                        REJECT → persist (skips normalize)
+
+op_b_hitl ──► normalize  (always — both approve and reject)
+normalize → persist → END
 ```
 
 **Atomic persist** (`write_output`) is a 4-phase write:
@@ -67,7 +81,7 @@ master → classify → extract → validate
 Phase A: DB audit rows (ConfidenceLog, TruthAuditLog, PersistenceAuditLog, SchemaProposalRecord)
 Phase B: Object store (MinIO / GCS)
 Phase C: Embedding (only if LearningPolicy.allow_learning)
-Phase D: Terminal status (completed | rejected | verification_failed)
+Phase D: Terminal status (completed | rejected | verification_failed | failed)
 
 Any failure → rollback + status = persist_failed + score-0.0 ConfidenceLog
 ```
@@ -76,15 +90,15 @@ Every node stamps `Document.current_phase` so progress is observable in real tim
 
 ## Dashboard Pages
 
-| Page | Path | What it does |
+| Page | File | What it does |
 |---|---|---|
-| Upload | `/` (`app.py`) | File upload + live status polling |
-| Documents | `pages/1_📋_Documents.py` | Browse all docs; tabs for Overview / Timeline / Explain / Similar |
-| Search | `pages/2_🔍_Search.py` | Semantic search with similarity scores and excerpts |
-| Review Queue | `pages/3_✅_Review_Queue.py` | HITL approve / reject with per-field correction editor |
-| Schema Proposals | `pages/4_🏛_Schema_Proposals.py` | Approve or reject pending schema changes |
-| Analytics | `pages/5_📊_Analytics.py` | Bar charts: strategy usage, verifier failures, avg confidence |
-| Knowledge Map | `pages/6_🗺_Knowledge_Map.py` | Force-directed retrieval graph (`streamlit-agraph`) |
+| Upload | `app.py` | File upload + live status polling |
+| Documents | `pages/1_Documents.py` | Browse all docs; tabs for Overview / Timeline / Explain / Similar |
+| Search | `pages/2_Search.py` | Semantic search with similarity scores and excerpts |
+| Review Queue | `pages/3_Review_Queue.py` | HITL approve / reject with per-field correction editor |
+| Schema Proposals | `pages/4_Schema_Proposals.py` | Approve or reject pending schema changes |
+| Analytics | `pages/5_Analytics.py` | Bar charts: strategy usage, verifier failures, avg confidence |
+| Knowledge Map | `pages/6_Knowledge_Map.py` | Force-directed retrieval graph (`streamlit-agraph`) |
 
 Run locally (outside Docker):
 ```bash
@@ -100,12 +114,25 @@ agents/
 │                          └─ self-consistency voting (confidence 0.60–0.85: 3-sample vote)
 │                          └─ deterministic verifier tool loop (MRZ, balance arithmetic)
 ├── schema_diff_agent.py   free-form field discovery → fuzzy diff → version bump
-├── validate_agent.py      rule-based field validation
-├── verifiers.py           MRZ check digit (ICAO 9303), balance arithmetic
+├── validate_agent.py      legacy rule-based validation (retained for compatibility)
+├── verifiers.py           MRZ, balance arithmetic, GSTIN, PAN, AY/FY, deed dates, etc.
 └── llm_client.py          Gemini: generate / embed / generate_with_tools
 ```
 
-## Schema Versioning
+## Supported Document Types
+
+| doc_type | Key fields | Verifiers |
+|---|---|---|
+| `passport` | surname, given_names, nationality, DOB, sex, place_of_birth, issue/expiry dates, passport_number, mrz_line1/2 | mrz_checksum, passport_date_consistency |
+| `bank_statement` | account_holder, account_number/iban, bank_name, opening/closing_balance, statement_period_start/end, currency, transactions[] | balance_arithmetic, statement_period_ordering |
+| `driving_license` | full_name, license_number, DOB, issue/expiry dates, address, vehicle_classes | — |
+| `aadhaar` | aadhaar_number, full_name, DOB, gender, address, vid | — |
+| `gst_invoice` | gstin, invoice_number, invoice_date, seller/buyer, HSN, tax_breakdown, totals | gstin_checksum, invoice_total_consistency |
+| `salary_slip` | employee_name, PAN, UAN, employer, pay_period, basic/allowances/deductions, net_pay | gross_consistency, pan_validation |
+| `itr` | PAN, assessment_year, financial_year, ITR_form, gross_income, tax_paid, refund, acknowledgement | pan_validation, ay_fy_consistency |
+| `property_deed` | deed_type, executant, claimant, property_description, area, consideration, execution/registration dates | deed_date_consistency |
+
+## Schema System
 
 ```
 config/schemas/<doc_type>.yaml   ← static bootstrap (never mutated at runtime)
@@ -123,31 +150,8 @@ schema_versions (Postgres)       ← live source of truth
 3. New labels → `additions`; required fields absent from document → `relaxed_fields`
 4. Non-empty diff → atomic version bump; extraction picks up the new schema immediately
 
-Schema proposals from the pipeline go to `schema_proposal_records` with status `pending`.
-Human approval via `POST /schema-proposals/{id}/approve` activates the new SchemaVersion.
-
-## Supported Doc Types
-
-| doc_type | Fields | Verifier |
-|---|---|---|
-| `passport` | 11 (surname, given_names, nationality, DOB, sex, place_of_birth, issue/expiry dates, passport_number, mrz_line1/2) | MRZ check digit |
-| `bank_statement` | 8 scalar + transactions array | Balance arithmetic |
-| `gst_invoice` | 11 (GSTIN, invoice number, date, seller/buyer, HSN, tax breakdown, totals) | — |
-| `salary_slip` | 11 (employee name, PAN, UAN, employer, period, basic/allowances/deductions, net pay) | — |
-| `itr` | 8 (PAN, assessment year, ITR form, gross income, tax paid, refund, acknowledgement) | — |
-| `property_deed` | 7 (deed type, executant, claimant, property description, area, consideration, registration date) | — |
-
-## Key Design Decisions
-
-- **LangGraph TypedDict state** with `Annotated` reducers (`operator.add`, `_keep_last`) on fields written by concurrent or retry nodes
-- **Self-consistency voting**: borderline extractions (confidence ∈ [0.60, 0.85)) run 3 passes; per-field mode vote resolves disagreements
-- **Deterministic verifiers**: MRZ check digits and balance arithmetic computed in Python, not inferred — logged as `verification_passed: bool | None`
-- **Atomic 4-phase persist**: any failure after Phase A → `persist_failed` status; document never shows `completed` unless all writes succeeded
-- **LearningPolicy as sole embedding authority**: `write_output` decides whether and how to embed; `review.py` does not embed directly
-- **SchemaProposalRecord**: pipeline-generated schema changes go to DB as `pending`; human approval via API activates them
-- **DB-first schema loading**: `load_schema_model()` queries `schema_versions` first; YAML is the bootstrap-only fallback; cache key is the version string
-- **Retrieval logging**: every RAG retrieval event writes a `RetrievalLog` row — real causal edges, not a synthetic similarity matrix
-- **Adapter pattern** (`adapters/`): MinIO / LocalWatch (local) and GCS / Pub/Sub (GCP) swapped via `ENV=LOCAL|GCP`; zero application-code changes
+Schema proposals go to `schema_proposal_records` as `pending`. Human approval via
+`POST /schema-proposals/{id}/approve` activates the new SchemaVersion.
 
 ## CI
 
@@ -166,18 +170,18 @@ Human approval via `POST /schema-proposals/{id}/approve` activates the new Schem
 | Phase | Status | Scope |
 |---|---|---|
 | P0 | ✅ done | Scaffold, contracts, TypedDict state |
-| P1 | ✅ done | Ingestion pipeline, object store, Document model |
-| P2 | ✅ done | Classification agent + routing engine |
-| P3 | ✅ done | Field extraction agent + schema loader |
-| P4 | ✅ done | Validation agent + router |
-| P5 | ✅ done | HITL node + checkpointer + review UI |
-| P5.5 | ✅ done | Human collaboration, LearningPolicy, schema proposals |
-| P6 | ✅ done | RAG retry with pgvector, compiled LangGraph, end-to-end wiring |
+| P1 | ✅ done | Ingestion pipeline, object store, Document model, dedup |
+| P2 | ✅ done | Classification agent + routing engine + DocumentRegistry |
+| P3 | ✅ done | Field extraction agent + schema loader + self-consistency |
+| P4 | ✅ done | Truth Engine (deterministic verifiers, TruthReport, VerifierRegistry) |
+| P5 | ✅ done | Resolution Engine (ResolutionPlanner, StrategyExecutor, strategies) |
+| P5-HITL | ✅ done | Human-in-the-loop: op_b_hitl, checkpointer, review UI, LearningPolicy |
+| P6 | ✅ done | RAG retry with pgvector, schema_diff_agent, retrieval logging |
 | P7 | ✅ done | Query API, semantic synthesizer, embedding task-type asymmetry |
 | P8 | ✅ done | Deterministic verifiers, self-consistency voting, CI pipeline |
-| P9 | ✅ done | Schema versioning, auto-discovery agent, 4 new doc_types |
-| P10 | ✅ done | Normalization, universal schema, output writing |
-| P11 | ✅ done | Transactional persistence, atomic 4-phase write, `persist_failed`, PersistenceAuditLog, SchemaProposalRecord, schema proposals API |
+| P9 | ✅ done | Schema versioning, auto-discovery, 4 new doc_types |
+| P10 | ✅ done | Normalization, universal schema, date canonicalization, fallback mapping |
+| P11 | ✅ done | Atomic 4-phase persist, PersistenceAuditLog, SchemaProposalRecord, schema proposals API |
 | P12 | ✅ done | Query & Explainability API (search, similar, timeline, explain, analytics) |
-| P13 | ✅ done | Multipage Streamlit dashboard (7 pages, api_client, dark theme, smoke tests) |
-| P14 | planned | GCP deployment (Cloud Run, GCS, Cloud SQL, Pub/Sub) |
+| P13 | ✅ done | 7-page Streamlit dashboard (api_client, dark theme, smoke tests) |
+| P14 | 🔲 planned | GCP deployment (Cloud Run, GCS, Cloud SQL, Pub/Sub) |

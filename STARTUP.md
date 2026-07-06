@@ -31,15 +31,14 @@ Edit `.env` and fill in:
 make up
 ```
 
-This runs `docker compose up -d --build`. Builds the `app` and `frontend` images
-and starts postgres, minio, app, and frontend. Wait ~10 seconds for healthchecks,
-then verify:
+Runs `docker compose up -d --build`. Builds the `app` and `frontend` images and
+starts postgres, minio, app, and frontend. Wait ~10 s for healthchecks, then verify:
 
 ```bash
 docker compose ps
 ```
 
-Expected output:
+Expected:
 ```
 NAME                    STATUS
 extract-it-app-1        Up
@@ -63,10 +62,11 @@ Tables created on first run:
 - `schema_versions` — versioned doc-type schemas
 - `retrieval_logs` — RAG retrieval edges
 - `truth_audit_logs` — Truth Engine verification results
-- `persistence_audit_logs` — per-run persist decisions (P11)
-- `schema_proposal_records` — human-gated schema changes (P11)
+- `persistence_audit_logs` — per-run persist decisions
+- `schema_proposal_records` — human-gated schema changes
 
-Also seeds all doc-type schemas from `config/schemas/*.yaml`.
+Also seeds all doc-type schemas from `config/schemas/*.yaml` (passport, bank_statement,
+driving_license, aadhaar, gst_invoice, salary_slip, itr, property_deed).
 
 ### 4. Initialise LangGraph checkpointer tables
 
@@ -189,7 +189,7 @@ print(get_graph().get_graph().draw_mermaid())
 |---|---|---|
 | FastAPI app | http://localhost:8000 | All REST endpoints |
 | API docs | http://localhost:8000/docs | Swagger UI |
-| Dashboard | http://localhost:8501 | Multipage Streamlit — Upload, Documents, Search, Review Queue, Schema Proposals, Analytics, Knowledge Map |
+| Dashboard | http://localhost:8501 | 7-page Streamlit — Upload, Documents, Search, Review Queue, Schema Proposals, Analytics, Knowledge Map |
 | MinIO console | http://localhost:9001 | Login: `minioadmin` / `minioadmin` |
 | Postgres | `localhost:5432` | DB: `docint`, user: `user`, pass: `password` |
 
@@ -197,6 +197,19 @@ print(get_graph().get_graph().draw_mermaid())
 > `make checkpointer` are unaffected — they run inside the container.
 > For direct `psql` access from the host:
 > `docker compose exec postgres psql -U user -d docint`
+
+---
+
+## Clearing data (dev reset)
+
+`clear_data.sh` wipes all document data and re-runs migrations:
+
+```bash
+bash clear_data.sh
+```
+
+> **Note**: Run `make checkpointer` again after `clear_data.sh` — it drops and
+> recreates the LangGraph checkpoint tables which Alembic does not manage.
 
 ---
 
@@ -230,25 +243,38 @@ make gcp-sim
 
 ---
 
+## Operational constraints
+
+**Watchfiles / uvicorn --reload**: the `app` container uses `uvicorn --reload`
+(watchfiles). Any `.py` file edit triggers a server reload, which kills all
+background pipeline threads. Do not edit source files while a pipeline is running.
+
+**Startup recovery**: on every app start, `_recover_stranded_documents()` in
+`api/main.py` scans for documents with `status=queued` AND `current_phase` in an
+in-progress set, and re-queues them automatically. This recovers documents that were
+mid-flight when the container was restarted.
+
+---
+
 ## Implementation status
 
 | Phase | Scope | Status |
 |---|---|---|
 | P0 | Infrastructure scaffold | ✅ Done |
-| P1 | Ingestion (MinIO, API, DB) | ✅ Done |
-| P2 | Classify agent + routing engine | ✅ Done |
-| P3 | Schema loader + Extract agent | ✅ Done |
-| P4 | Validate agent + Router | ✅ Done |
-| P5 | HITL node + Checkpointer + Review UI | ✅ Done |
-| P5.5 | Human collaboration + LearningPolicy + schema proposals | ✅ Done |
-| P6 | RAG retry (pgvector) + compiled LangGraph + end-to-end wiring | ✅ Done |
+| P1 | Ingestion (MinIO, API, DB, dedup) | ✅ Done |
+| P2 | Classify agent + routing engine + DocumentRegistry | ✅ Done |
+| P3 | Schema loader + Extract agent + self-consistency | ✅ Done |
+| P4 | Truth Engine (deterministic verifiers, TruthReport) | ✅ Done |
+| P5 | Resolution Engine (ResolutionPlanner, StrategyExecutor) | ✅ Done |
+| P5-HITL | Human-in-the-loop: op_b_hitl, checkpointer, LearningPolicy | ✅ Done |
+| P6 | RAG retry (pgvector) + schema_diff_agent + retrieval logging | ✅ Done |
 | P7 | Query API + semantic synthesizer | ✅ Done |
-| P8 | Deterministic verifiers + self-consistency + CI | ✅ Done |
+| P8 | Deterministic verifiers + CI pipeline | ✅ Done |
 | P9 | Schema versioning + auto-discovery + 4 new doc_types | ✅ Done |
-| P10 | Normalize + universal schema + output writing | ✅ Done |
-| P11 | Transactional persistence + PersistenceAuditLog + SchemaProposalRecord + schema proposals API | ✅ Done |
+| P10 | Normalize + universal schema + fallback mapping | ✅ Done |
+| P11 | Transactional persistence + audit logs + schema proposals API | ✅ Done |
 | P12 | Query & Explainability API (search, similar, timeline, explain, analytics) | ✅ Done |
-| P13 | Multipage Streamlit dashboard (7 pages + api_client + dark theme + smoke tests) | ✅ Done |
+| P13 | 7-page Streamlit dashboard (api_client, dark theme, smoke tests) | ✅ Done |
 | P14 | GCP deployment (Cloud Run, GCS, Cloud SQL, Pub/Sub) | 🔲 Planned |
 
-See [README.md](README.md) for API endpoints and [ARCHITECTURE.md](ARCHITECTURE.md) for component details.
+See [README.md](README.md) for API endpoints and [architecture/architecture.md](architecture/architecture.md) for component details.
