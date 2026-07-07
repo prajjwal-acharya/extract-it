@@ -9,6 +9,5 @@ def validate_node(state: GraphState) -> dict:
         "validation_issues": result.data.get("issues", []),
         "validate_confidence": result.confidence,
     }
-    if result.reason is not None:
-        update["error"] = result.reason
+    update["error"] = result.reason if result.reason is not None else None
     return update

@@ -11,13 +11,11 @@ import pandas as pd  # type: ignore[import-untyped]
 from api_client import ApiError, client
 
 st.set_page_config(page_title="Schema Proposals · Doc Intel", layout="wide")
-st.title("🏛 Schema Proposals")
-st.caption("Pending schema changes require human approval before activating a new SchemaVersion")
+st.title("Schema Proposals")
+st.caption("Pending schema changes require human approval before activating a new schema version")
 
-if st.button("↻ Refresh"):
+if st.button("Refresh"):
     st.rerun()
-
-# ── Load pending proposals ────────────────────────────────────────────────────
 
 try:
     proposals = client.get_pending_proposals()
@@ -26,12 +24,10 @@ except ApiError as e:
     st.stop()
 
 if not proposals:
-    st.success("🎉 No pending schema proposals.")
+    st.success("No pending schema proposals.")
     st.stop()
 
 st.info(f"{len(proposals)} pending proposal(s)")
-
-# ── Display and act on each proposal ─────────────────────────────────────────
 
 for p in proposals:
     pid = p.get("id", "")
@@ -43,8 +39,7 @@ for p in proposals:
     created_at = p.get("created_at") or "—"
 
     with st.expander(
-        f"📐 `{doc_type}` → v{proposed_version}  |  {len(additions)} additions, "
-        f"{len(relaxed)} relaxed  |  {created_at[:10]}",
+        f"{doc_type}  →  v{proposed_version}  ·  {len(additions)} additions, {len(relaxed)} relaxed  ·  {created_at[:10]}",
         expanded=True,
     ):
         col_meta, col_actions = st.columns([3, 1])
@@ -55,35 +50,29 @@ for p in proposals:
             st.markdown(f"**Proposed version:** `{proposed_version}`")
 
             if additions:
-                st.markdown("**New fields (additions):**")
-                st.dataframe(
-                    pd.DataFrame(additions),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.markdown("**New fields:**")
+                st.dataframe(pd.DataFrame(additions), use_container_width=True, hide_index=True)
 
             if relaxed:
-                st.markdown("**Fields to make optional (relaxed):**")
+                st.markdown("**Fields to make optional:**")
                 for f in relaxed:
                     st.markdown(f"- `{f}`")
 
         with col_actions:
             st.markdown("**Actions**")
 
-            if st.button("✅ Approve", key=f"approve_{pid}", type="primary"):
+            if st.button("Approve", key=f"approve_{pid}", type="primary"):
                 with st.spinner("Approving…"):
                     try:
                         result = client.approve_proposal(pid)
-                        st.success(f"Approved → new version `{result.get('new_schema_version')}`")
+                        st.success(f"Approved → v{result.get('new_schema_version')}")
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Approval failed: {e}")
 
             st.markdown("---")
-            reject_reason = st.text_input(
-                "Rejection reason", key=f"reason_{pid}", placeholder="not needed"
-            )
-            if st.button("⛔ Reject", key=f"reject_{pid}"):
+            reject_reason = st.text_input("Rejection reason", key=f"reason_{pid}", placeholder="optional")
+            if st.button("Reject", key=f"reject_{pid}"):
                 if not reject_reason.strip():
                     st.warning("Please provide a rejection reason.")
                 else:

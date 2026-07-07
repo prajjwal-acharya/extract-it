@@ -82,9 +82,12 @@ class ReviewerPayload:
             verifier_failures = []
             confidence_breakdown = {}
 
-        planner_reason = (
-            resolution_decision.reason if resolution_decision is not None else "no_decision"
-        )
+        if state.get("low_quality_image"):
+            planner_reason = "Image quality gate: blank or solid-color image — no extraction attempted"
+        elif resolution_decision is not None:
+            planner_reason = resolution_decision.reason
+        else:
+            planner_reason = "no_decision"
 
         execution_summary = [
             {

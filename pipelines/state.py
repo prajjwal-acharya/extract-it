@@ -79,6 +79,9 @@ class GraphState(TypedDict):
     # Read by LearningPolicy to distinguish learn_from_document vs learn_from_correction.
     hitl_correction: bool
 
+    # ── Image quality gate (set by master_node before any LLM calls) ────────
+    low_quality_image: bool | None
+
     # ── Status and error tracking ───────────────────────────────────────────
     error: str | None
     status: str

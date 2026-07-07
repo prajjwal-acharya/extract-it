@@ -11,9 +11,7 @@ import pandas as pd  # type: ignore[import-untyped]
 from api_client import ApiError, client
 
 st.set_page_config(page_title="Documents · Doc Intel", layout="wide")
-st.title("📋 Documents")
-
-# ── Filters ──────────────────────────────────────────────────────────────────
+st.title("Documents")
 
 STATUSES = [
     "",
@@ -25,16 +23,14 @@ STATUSES = [
     "persist_failed",
     "verification_failed",
 ]
-DOC_TYPES = ["", "passport", "bank_statement", "invoice", "id_card", "driving_license"]
+DOC_TYPES = ["", "passport", "bank_statement", "driving_license", "salary_slip", "itr", "gst_invoice", "property_deed"]
 
 col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
 status_filter = col1.selectbox("Status", STATUSES)
 doc_type_filter = col2.selectbox("Doc type", DOC_TYPES)
 limit = col3.number_input("Limit", min_value=10, max_value=200, value=50, step=10)
-if col4.button("↻ Refresh"):
+if col4.button("Refresh"):
     st.rerun()
-
-# ── Document table ────────────────────────────────────────────────────────────
 
 try:
     docs = client.list_documents(
@@ -50,7 +46,6 @@ if not docs:
     st.info("No documents found. Upload one from the home page.")
     st.stop()
 
-# Enrich table with confidence scores from logs
 rows = []
 for d in docs:
     rows.append(
@@ -80,11 +75,7 @@ st.dataframe(
 
 st.caption(f"{len(docs)} documents")
 
-# ── Document selection ────────────────────────────────────────────────────────
-
-doc_ids = [d["id"] for d in docs]
 doc_labels = {f"{d['filename']} · {d['id'][:8]}": d["id"] for d in docs}
-
 pre_selected = st.session_state.get("selected_doc_id", "")
 default_label = next((lbl for lbl, id_ in doc_labels.items() if id_ == pre_selected), "")
 label_options = ["— select —"] + list(doc_labels.keys())
@@ -97,8 +88,6 @@ if selected_label == "— select —":
 selected_id = doc_labels[selected_label]
 st.session_state["selected_doc_id"] = selected_id
 
-# ── Document detail tabs ──────────────────────────────────────────────────────
-
 try:
     detail = client.get_document(selected_id)
 except ApiError as e:
@@ -106,10 +95,8 @@ except ApiError as e:
     st.stop()
 
 tab_overview, tab_timeline, tab_explain, tab_similar = st.tabs(
-    ["📄 Overview", "⏱ Timeline", "🔎 Explain", "🔗 Similar"]
+    ["Overview", "Timeline", "Explain", "Similar"]
 )
-
-# ── Tab: Overview ─────────────────────────────────────────────────────────────
 
 with tab_overview:
     col_a, col_b, col_c = st.columns(3)
@@ -117,7 +104,6 @@ with tab_overview:
     col_b.metric("Phase", detail.get("current_phase") or "—")
     col_c.metric("Doc type", detail.get("doc_type") or "—")
 
-    # Confidence logs
     logs = detail.get("confidence_logs") or []
     if logs:
         st.markdown("**Confidence signals**")
@@ -132,7 +118,6 @@ with tab_overview:
     with col_left:
         with st.expander("Extracted fields", expanded=True):
             st.json(detail.get("extracted_fields") or {})
-
         with st.expander("Universal schema"):
             st.json(detail.get("universal_schema") or {})
 
@@ -144,20 +129,15 @@ with tab_overview:
                 c1.metric("Confidence", f"{truth.get('final_confidence', 0):.3f}")
                 c2.metric("Coverage", f"{truth.get('coverage_score', 0):.3f}")
                 st.caption(truth.get("decision_reason") or "")
-
                 if truth.get("verification_reports"):
                     st.markdown("**Verifier results**")
                     for vr in truth["verification_reports"]:
                         icon = "✅" if vr.get("passed") else "❌"
                         st.markdown(
-                            f"{icon} **{vr['verifier_name']}** — "
-                            f"score `{vr.get('confidence', 0):.2f}`"
+                            f"{icon} **{vr['verifier_name']}** — score `{vr.get('confidence', 0):.2f}`"
                         )
-
                 if truth.get("required_fields_missing"):
-                    st.warning(
-                        f"Missing required fields: {', '.join(truth['required_fields_missing'])}"
-                    )
+                    st.warning(f"Missing required fields: {', '.join(truth['required_fields_missing'])}")
                 if truth.get("additional_fields"):
                     st.info(f"Additional fields found: {', '.join(truth['additional_fields'])}")
 
@@ -174,9 +154,7 @@ with tab_overview:
             with st.expander("Learning decision"):
                 cols = st.columns(2)
                 cols[0].metric("Allow learning", "Yes" if learning.get("allow_learning") else "No")
-                cols[1].metric(
-                    "Schema candidate", "Yes" if learning.get("schema_candidate") else "No"
-                )
+                cols[1].metric("Schema candidate", "Yes" if learning.get("schema_candidate") else "No")
                 st.caption(learning.get("reason") or "")
                 if learning.get("schema_proposal"):
                     st.json(learning["schema_proposal"])
@@ -190,12 +168,7 @@ with tab_overview:
 
     if detail.get("retrieval_history"):
         with st.expander("Retrieval history"):
-            st.dataframe(
-                pd.DataFrame(detail["retrieval_history"]),
-                use_container_width=True,
-            )
-
-# ── Tab: Timeline ─────────────────────────────────────────────────────────────
+            st.dataframe(pd.DataFrame(detail["retrieval_history"]), use_container_width=True)
 
 with tab_timeline:
     try:
@@ -208,30 +181,22 @@ with tab_timeline:
         st.info("No timeline data available yet.")
     else:
         _EVENT_COLORS = {
-            "upload": "🟦",
-            "classification": "🟩",
-            "extraction": "🟨",
-            "truth_engine": "🟧",
-            "schema_validation": "🟪",
-            "persistence": "⬜",
-            "human_review": "🔴",
+            "upload": "●",
+            "classification": "●",
+            "extraction": "●",
+            "truth_engine": "●",
+            "schema_validation": "●",
+            "persistence": "●",
+            "human_review": "●",
         }
-
         rows = []
         for ev in timeline:
-            name = ev.get("event", "")
-            icon = next((v for k, v in _EVENT_COLORS.items() if name.startswith(k)), "⬛")
             rows.append(
                 {
-                    "": icon,
-                    "Event": name,
+                    "Event": ev.get("event", ""),
                     "Timestamp": ev.get("timestamp") or "—",
-                    "Confidence": f"{ev['confidence']:.3f}"
-                    if ev.get("confidence") is not None
-                    else "—",
-                    "Duration ms": ev.get("duration_ms")
-                    if ev.get("duration_ms") is not None
-                    else "—",
+                    "Confidence": f"{ev['confidence']:.3f}" if ev.get("confidence") is not None else "—",
+                    "Duration ms": ev.get("duration_ms"),
                     "Strategy": ev.get("strategy") or "—",
                     "Reason": (ev.get("reason") or "")[:80],
                 }
@@ -242,14 +207,12 @@ with tab_timeline:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "": st.column_config.TextColumn("", width="small"),
                 "Event": st.column_config.TextColumn("Event", width="medium"),
                 "Confidence": st.column_config.TextColumn("Confidence", width="small"),
                 "Duration ms": st.column_config.NumberColumn("Duration ms", width="small"),
             },
         )
 
-        # Simple confidence-over-time bar chart
         conf_data = [
             {"event": ev["event"], "confidence": ev["confidence"]}
             for ev in timeline
@@ -257,10 +220,7 @@ with tab_timeline:
         ]
         if conf_data:
             st.markdown("**Confidence per event**")
-            chart_df = pd.DataFrame(conf_data).set_index("event")
-            st.bar_chart(chart_df)
-
-# ── Tab: Explain ──────────────────────────────────────────────────────────────
+            st.bar_chart(pd.DataFrame(conf_data).set_index("event"))
 
 with tab_explain:
     try:
@@ -271,14 +231,14 @@ with tab_explain:
 
     if explain:
         verdict = explain.get("verdict", "unknown")
-        verdict_icons = {
-            "completed": "✅ Accepted",
-            "rejected": "⛔ Rejected",
-            "failed": "❌ Failed",
-            "persist_failed": "⚠️ Persist failed",
-            "verification_failed": "🔬 Verification failed",
+        verdict_labels = {
+            "completed": "Accepted",
+            "rejected": "Rejected",
+            "failed": "Failed",
+            "persist_failed": "Persist failed",
+            "verification_failed": "Verification failed",
         }
-        st.subheader(verdict_icons.get(verdict, f"📄 {verdict}"))
+        st.subheader(verdict_labels.get(verdict, verdict))
 
         conf = explain.get("confidence") or {}
         col1, col2 = st.columns(2)
@@ -289,28 +249,25 @@ with tab_explain:
 
         if explain.get("truth_engine_reason"):
             st.info(f"**Truth Engine:** {explain['truth_engine_reason']}")
-
         if explain.get("planner_reasoning"):
             st.info(f"**Planner:** {explain['planner_reasoning']}")
 
-        # Verifiers
         verifiers = explain.get("verifiers") or {}
         passed = verifiers.get("passed") or []
-        failed = verifiers.get("failed") or []
-        if passed or failed:
+        failed_v = verifiers.get("failed") or []
+        if passed or failed_v:
             st.markdown("**Verifier results**")
             col_p, col_f = st.columns(2)
             with col_p:
                 st.success(f"Passed ({len(passed)})")
                 for v in passed:
-                    st.markdown(f"- ✅ {v}")
+                    st.markdown(f"- {v}")
             with col_f:
-                if failed:
-                    st.error(f"Failed ({len(failed)})")
-                    for v in failed:
-                        st.markdown(f"- ❌ {v}")
+                if failed_v:
+                    st.error(f"Failed ({len(failed_v)})")
+                    for v in failed_v:
+                        st.markdown(f"- {v}")
 
-        # Field coverage
         fields = explain.get("field_coverage") or {}
         missing = fields.get("missing_required") or []
         additional = fields.get("additional_discovered") or []
@@ -319,24 +276,20 @@ with tab_explain:
         if additional:
             st.info(f"**Additional fields discovered:** {', '.join(additional)}")
 
-        # Learning
         learning = explain.get("learning")
         if learning:
             st.markdown("**Learning decision**")
             action_labels = {
-                "learned_from_document": "📚 Learned from document",
-                "learned_from_human_correction": "🧑‍🏫 Learned from human correction",
-                "learning_allowed_but_not_applied": "🔒 Learning allowed but not applied",
-                "learning_blocked": "🚫 Learning blocked",
+                "learned_from_document": "Learned from document",
+                "learned_from_human_correction": "Learned from human correction",
+                "learning_allowed_but_not_applied": "Learning allowed but not applied",
+                "learning_blocked": "Learning blocked",
             }
-            action = learning.get("action", "")
-            st.markdown(action_labels.get(action, action))
+            st.markdown(action_labels.get(learning.get("action", ""), learning.get("action", "")))
             if learning.get("reason"):
                 st.caption(learning["reason"])
             if learning.get("schema_candidate"):
                 st.info("Schema change proposed — check Schema Proposals page")
-
-# ── Tab: Similar ─────────────────────────────────────────────────────────────
 
 with tab_similar:
     try:

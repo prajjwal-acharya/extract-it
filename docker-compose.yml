@@ -80,3 +80,15 @@ services:
 volumes:
   pgdata:
   miniodata:
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      # Docker Desktop on macOS routes container traffic through a VM, adding
+      # overhead that makes the effective path MTU < 1500. Large TLS records
+      # get fragmented silently, causing SSLV3_ALERT_BAD_RECORD_MAC on any
+      # HTTPS request carrying a payload > ~50KB (e.g. passport images).
+      # 1400 is safe for VPN + PPPoE paths; the cost is one extra TCP segment
+      # per ~1400-byte chunk, negligible at API call frequencies.
+      com.docker.network.driver.mtu: "1400"

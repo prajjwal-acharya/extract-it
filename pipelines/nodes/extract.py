@@ -63,6 +63,5 @@ def extract_node(state: GraphState) -> dict:
         "extraction_result": result,
         "tool_call_count": 0,
     }
-    if not result.success:
-        update["error"] = result.error
+    update["error"] = result.error if not result.success else None
     return update

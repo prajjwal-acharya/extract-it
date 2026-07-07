@@ -6,7 +6,10 @@ fields:
     required: true
   - name: account_number
     type: string
-    required: true
+    required: false
+  - name: iban
+    type: string
+    required: false
   - name: bank_name
     type: string
     required: true
@@ -46,3 +49,5 @@ universal_mapping:
   holder_name: account_holder
   id_number: account_number
   expiry_date: null
+universal_mapping_fallback:
+  id_number: iban

@@ -57,6 +57,13 @@ def _persist_node(state: GraphState) -> dict:
     return {}
 
 
+def _route_after_master(state: GraphState) -> str:
+    """Bypass LLM classify/extract for images detected as blank or solid-color."""
+    if state.get("low_quality_image"):
+        return "op_b_hitl"
+    return "classify"
+
+
 def _route_after_classify(state: GraphState) -> str:
     """Route based on RoutingPlan.action.
 
@@ -104,7 +111,11 @@ def build_graph() -> CompiledStateGraph:
         builder.add_node(name, _stamp_phase(name, node))
 
     builder.set_entry_point("master")
-    builder.add_edge("master", "classify")
+    builder.add_conditional_edges(
+        "master",
+        _route_after_master,
+        {"classify": "classify", "op_b_hitl": "op_b_hitl"},
+    )
     builder.add_conditional_edges(
         "classify",
         _route_after_classify,

@@ -24,12 +24,15 @@ def _require_api_key(key: str | None = Depends(_api_key_header)) -> None:
 @router.get("/pending")
 def list_pending_review(session: Session = Depends(get_db)) -> list[dict]:
     """Documents currently in awaiting_review phase."""
+    from pipelines.graph import get_graph
+
     docs = (
         session.query(Document)
         .filter(Document.current_phase == "awaiting_review")
         .order_by(Document.created_at.desc())
         .all()
     )
+    graph = get_graph()
     result = []
     for doc in docs:
         confidence_logs = (
@@ -58,6 +61,20 @@ def list_pending_review(session: Session = Depends(get_db)) -> list[dict]:
                     "similarity_score": log.similarity_score,
                 }
             )
+
+        # Extracted fields live in the LangGraph checkpoint at HITL pause time,
+        # not in the DB (write_output hasn't run yet). Pull from checkpoint first.
+        extracted_fields = doc.extracted_fields or {}
+        try:
+            config = {"configurable": {"thread_id": doc.id}}
+            snapshot = graph.get_state(config)
+            if snapshot and snapshot.values:
+                checkpoint_fields = snapshot.values.get("extracted_fields") or {}
+                if checkpoint_fields:
+                    extracted_fields = checkpoint_fields
+        except Exception:
+            pass  # fall back to DB value
+
         result.append(
             {
                 "id": doc.id,
@@ -65,7 +82,7 @@ def list_pending_review(session: Session = Depends(get_db)) -> list[dict]:
                 "doc_type": doc.doc_type,
                 "status": doc.status,
                 "current_phase": doc.current_phase,
-                "extracted_fields": doc.extracted_fields,
+                "extracted_fields": extracted_fields,
                 "universal_schema": doc.universal_schema,
                 "confidence_logs": [
                     {"agent": cl.agent, "score": cl.score, "reason": cl.reason}
@@ -107,7 +124,7 @@ def submit_decision(
         except FileNotFoundError:
             pass  # unknown doc_type — skip field validation
 
-    result = graph.invoke(Command(resume=decision.model_dump()), config=config)  # type: ignore[call-overload]
+    graph.invoke(Command(resume=decision.model_dump()), config=config)  # type: ignore[call-overload]
 
     # Correction exemplars are embedded by write_output (gated on LearningPolicy).
-    return {"status": "resumed", "state": result}
+    return {"status": "resumed", "document_id": document_id}

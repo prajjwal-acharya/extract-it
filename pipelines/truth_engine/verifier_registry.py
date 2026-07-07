@@ -68,32 +68,60 @@ def _extract_passport_dates(fields: dict) -> dict | None:
 
 
 def _extract_balance_args(fields: dict) -> dict | None:
-    """Resolve opening/closing aliases; handle dict or float transactions."""
-    opening = (
-        fields.get("opening_balance")
-        if fields.get("opening_balance") is not None
-        else fields.get("opening")
-    )
-    closing = (
-        fields.get("closing_balance")
-        if fields.get("closing_balance") is not None
-        else fields.get("closing")
-    )
+    """Resolve opening/closing aliases; handle dict or float transactions.
+
+    Preferred path: use the running `balance` on the last transaction row as the
+    computed closing — this avoids double-counting "Opening Balance" marker rows
+    that LLMs often include as the first transaction entry.
+
+    Fallback: sum debit/credit amounts (or single `amount` field) when no running
+    balance column is present.
+    """
+    opening = fields.get("opening_balance") if fields.get("opening_balance") is not None else fields.get("opening")
+    closing = fields.get("closing_balance") if fields.get("closing_balance") is not None else fields.get("closing")
     if opening is None or closing is None:
         return None
     raw = fields.get("transactions") or []
     try:
-        amounts: list[float] = [
-            float(t.get("amount", 0.0)) if isinstance(t, dict) else float(t) for t in raw
-        ]
+        # Use the running balance on the last real transaction row when available.
+        last_balance: float | None = None
+        for t in reversed(raw):
+            if isinstance(t, dict) and t.get("balance") is not None:
+                last_balance = float(t["balance"])
+                break
+
+        if last_balance is not None:
+            # Verify last running balance == closing_balance (skip transaction sum entirely).
+            return {"opening": float(opening), "closing": float(closing), "transactions": [last_balance - float(opening)]}
+
+        # Fallback: sum signed amounts, skipping rows where only a running balance exists.
+        amounts: list[float] = []
+        for t in raw:
+            if isinstance(t, dict):
+                if "amount" in t:
+                    amounts.append(float(t["amount"]))
+                elif t.get("credit") is not None or t.get("debit") is not None:
+                    credit = float(t.get("credit") or 0.0)
+                    debit = float(t.get("debit") or 0.0)
+                    amounts.append(credit - debit)
+            else:
+                amounts.append(float(t))
         return {"opening": float(opening), "closing": float(closing), "transactions": amounts}
     except (TypeError, ValueError):
         return None
 
 
 def _extract_period_args(fields: dict) -> dict | None:
-    start = fields.get("statement_start_date") or fields.get("period_start")
-    end = fields.get("statement_end_date") or fields.get("period_end")
+    start = (
+        fields.get("statement_period_start")
+        or fields.get("statement_start_date")
+        or fields.get("period_start")
+    )
+    end = (
+        fields.get("statement_period_end")
+        or fields.get("statement_end_date")
+        or fields.get("period_end")
+    )
     if not start or not end:
         return None
     return {"start_date": start, "end_date": end}

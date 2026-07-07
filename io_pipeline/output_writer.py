@@ -23,10 +23,19 @@ _learning_policy = LearningPolicy()
 
 
 def _compute_terminal_status(state: GraphState, truth_report: TruthReport | None) -> str:
-    if state.get("error"):
-        return "failed"
+    # Human rejection is final.
     if state.get("hitl_required") and not state.get("hitl_approved"):
         return "rejected"
+    # Human approval overrides automated verifier failures — the reviewer has
+    # accepted responsibility for the document's correctness.
+    if state.get("hitl_required") and state.get("hitl_approved"):
+        return "completed"
+    # A truth report that explicitly allows completion takes precedence over stale
+    # error flags (e.g. from a failed first attempt that succeeded on retry).
+    if truth_report is not None and truth_report.persistence.allow_completion:
+        return truth_report.persistence.document_status
+    if state.get("error"):
+        return "failed"
     if truth_report is not None:
         return truth_report.persistence.document_status
     return "failed"

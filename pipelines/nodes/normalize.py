@@ -2,7 +2,7 @@ import re
 
 from dateutil import parser as date_parser
 
-from config.schema_loader import load_universal_mapping
+from config.schema_loader import load_universal_mapping, load_universal_mapping_fallback
 from pipelines.state import GraphState
 
 _UNIVERSAL_KEYS = ("holder_name", "id_number", "expiry_date")
@@ -14,6 +14,10 @@ def _resolve(template: str | None, fields: dict) -> str | None:
         return None
     if template in fields:
         return fields[template]
+    # Only attempt format substitution if the template actually contains placeholders;
+    # otherwise a plain field name that isn't in fields would resolve to itself literally.
+    if "{" not in template:
+        return None
     try:
         return template.format(**fields)
     except (KeyError, IndexError):
@@ -41,6 +45,17 @@ def normalize_node(state: GraphState) -> dict:
     except FileNotFoundError:
         mapping = {}
 
-    universal = {key: _resolve(mapping.get(key), fields) for key in _UNIVERSAL_KEYS}
+    try:
+        fallback_mapping = load_universal_mapping_fallback(doc_type) if doc_type else {}
+    except FileNotFoundError:
+        fallback_mapping = {}
+
+    universal = {}
+    for key in _UNIVERSAL_KEYS:
+        value = _resolve(mapping.get(key), fields)
+        if value is None and key in fallback_mapping:
+            value = _resolve(fallback_mapping[key], fields)
+        universal[key] = value
+
     universal["expiry_date"] = _canonicalize_date(universal["expiry_date"])
     return {"universal_schema": universal}

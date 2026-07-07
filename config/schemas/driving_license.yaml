@@ -1,0 +1,53 @@
+doc_type: driving_license
+version: "1.0"
+fields:
+  - name: license_number
+    type: string
+    required: true
+  - name: full_name
+    type: string
+    required: false
+  - name: surname
+    type: string
+    required: false
+  - name: given_names
+    type: string
+    required: false
+  - name: date_of_birth
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: date_of_issue
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+  - name: date_of_expiry
+    type: date
+    format: "YYYY-MM-DD"
+    required: false
+  - name: address
+    type: string
+    required: false
+  - name: temp_address
+    type: string
+    required: false
+  - name: guardian_name
+    type: string
+    required: false
+  - name: vehicle_class
+    type: string
+    required: false
+  - name: issuing_authority
+    type: string
+    required: false
+  - name: blood_group
+    type: string
+    required: false
+
+universal_mapping:
+  holder_name: "full_name"
+  id_number: license_number
+  expiry_date: date_of_expiry
+
+universal_mapping_fallback:
+  holder_name: "{given_names} {surname}"

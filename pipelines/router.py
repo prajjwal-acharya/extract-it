@@ -33,5 +33,9 @@ def route_after_executor(state: GraphState) -> str:
 
 
 def route_after_hitl(state: GraphState) -> str:
-    """Return the next node name after the HITL node."""
-    return "normalize" if state.get("hitl_approved") else "persist"
+    """Return the next node name after the HITL node.
+
+    Always normalize first so universal_schema is populated regardless of
+    approval status. persist reads hitl_approved to set the terminal status.
+    """
+    return "normalize"

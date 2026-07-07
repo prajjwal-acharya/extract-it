@@ -1,0 +1,27 @@
+doc_type: aadhaar
+version: "1.0"
+fields:
+  - name: aadhaar_number
+    type: string
+    required: true
+  - name: full_name
+    type: string
+    required: true
+  - name: date_of_birth
+    type: date
+    format: "YYYY-MM-DD"
+    required: false
+  - name: gender
+    type: string
+    required: false
+  - name: address
+    type: string
+    required: false
+  - name: vid
+    type: string
+    required: false
+
+universal_mapping:
+  holder_name: full_name
+  id_number: aadhaar_number
+  expiry_date: null

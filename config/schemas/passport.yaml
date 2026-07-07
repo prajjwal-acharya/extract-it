@@ -32,6 +32,9 @@ fields:
   - name: passport_number
     type: string
     required: true
+  - name: issuing_authority
+    type: string
+    required: false
   - name: mrz_line1
     type: string
     required: false

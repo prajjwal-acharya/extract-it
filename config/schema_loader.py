@@ -97,6 +97,15 @@ def load_universal_mapping(doc_type: str) -> dict:
     return _load_yaml_raw(doc_type).get("universal_mapping", {})
 
 
+def load_universal_mapping_fallback(doc_type: str) -> dict:
+    """Return the universal_mapping_fallback from YAML (always YAML — no DB override).
+
+    Keys match _UNIVERSAL_KEYS; values are field names tried when the primary
+    mapping resolves to None (e.g. 'iban' as fallback for 'id_number').
+    """
+    return _load_yaml_raw(doc_type).get("universal_mapping_fallback", {})
+
+
 def load_schema_model(doc_type: str) -> type[BaseModel]:
     """Build (or return cached) Pydantic model for doc_type's active schema.
 

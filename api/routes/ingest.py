@@ -30,8 +30,8 @@ def _run_pipeline(document_id: str, filename: str, object_key: str) -> None:
 
 @router.post("/")
 async def ingest(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> dict:
     """Accept a document upload, store it, and trigger the pipeline."""
     filename = os.path.basename(file.filename or "upload") or "upload"
