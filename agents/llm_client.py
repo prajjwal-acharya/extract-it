@@ -26,12 +26,12 @@ def _compress_image(data: bytes, mime_type: str) -> tuple[bytes, str]:
     if mime_type == "application/pdf" or len(data) <= _MAX_IMAGE_BYTES:
         return data, mime_type
 
-    img = Image.open(io.BytesIO(data))
+    img: Image.Image = Image.open(io.BytesIO(data))
     # Downscale if either dimension exceeds the cap
     w, h = img.size
     if max(w, h) > _MAX_IMAGE_DIM:
         scale = _MAX_IMAGE_DIM / max(w, h)
-        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
     # Re-encode as JPEG (universal, smaller than PNG)
     buf = io.BytesIO()

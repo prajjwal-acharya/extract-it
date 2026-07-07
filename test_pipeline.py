@@ -18,7 +18,7 @@ initial_state = {
 }
 print("invoking graph...")
 try:
-    result = get_graph().invoke(initial_state, config=config)
+    result = get_graph().invoke(initial_state, config=config)  # type: ignore[call-overload]
     print("graph done, result keys:", list(result.keys()) if result else "EMPTY")
 except Exception as e:
     print("EXCEPTION:", e)

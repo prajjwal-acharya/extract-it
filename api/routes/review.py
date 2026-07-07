@@ -67,7 +67,7 @@ def list_pending_review(session: Session = Depends(get_db)) -> list[dict]:
         extracted_fields = doc.extracted_fields or {}
         try:
             config = {"configurable": {"thread_id": doc.id}}
-            snapshot = graph.get_state(config)
+            snapshot = graph.get_state(config)  # type: ignore[arg-type]
             if snapshot and snapshot.values:
                 checkpoint_fields = snapshot.values.get("extracted_fields") or {}
                 if checkpoint_fields:
