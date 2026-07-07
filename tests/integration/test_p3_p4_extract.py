@@ -14,7 +14,8 @@ def test_extract_output_keys_match_schema_fields(passport_state) -> None:
         '{"surname": "LEE", "given_names": "ANNA", "nationality": "SGP", '
         '"date_of_birth": "1992-03-10", "sex": "F", "place_of_birth": null, '
         '"date_of_issue": "2021-06-01", "date_of_expiry": "2031-06-01", '
-        '"passport_number": "S7654321", "mrz_line1": null, "mrz_line2": null, '
+        '"passport_number": "S7654321", "issuing_authority": null, '
+        '"mrz_line1": null, "mrz_line2": null, '
         '"confidence": 0.88}'
     )
     mock_response = mock.MagicMock()

@@ -64,7 +64,7 @@ def _with_retry(fn):
     for attempt in range(_MAX_RETRIES + 1):
         try:
             return fn()
-        except _RETRYABLE as exc:
+        except _RETRYABLE:
             if attempt == _MAX_RETRIES:
                 raise
             time.sleep(_BACKOFF_BASE ** attempt)

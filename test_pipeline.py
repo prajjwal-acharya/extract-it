@@ -1,8 +1,10 @@
-import sys, logging
+import logging
+import sys
+
 logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, force=True)
 
 print("=== Testing graph invocation ===")
-from pipelines.graph import get_graph
+from pipelines.graph import get_graph  # noqa: E402
 
 doc_id = "36f66a05-61f3-4b67-9099-14db9e1547ab"
 config = {"configurable": {"thread_id": doc_id}}
@@ -20,4 +22,5 @@ try:
     print("graph done, result keys:", list(result.keys()) if result else "EMPTY")
 except Exception as e:
     print("EXCEPTION:", e)
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()

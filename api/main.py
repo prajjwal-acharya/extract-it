@@ -56,7 +56,7 @@ def _recover_stranded_documents() -> None:
     import threading
 
     from db.models import Document
-    from db.session import get_session, session_scope
+    from db.session import session_scope
     from pipelines.graph import get_graph
 
     _IN_PROGRESS_PHASES = {"ingested", "classifying", "extracting", "evaluating", "planning", "executing", "retrying", "normalizing", "finalizing"}

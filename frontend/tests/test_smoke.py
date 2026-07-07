@@ -115,7 +115,7 @@ class TestHomePage:
 
 
 class TestDocumentsPage:
-    _page = str(_pages_dir() / "1_📋_Documents.py")
+    _page = str(_pages_dir() / "1_Documents.py")
 
     def test_documents_page_loads_empty(self) -> None:
         at = AppTest.from_file(self._page)
@@ -153,7 +153,7 @@ class TestDocumentsPage:
 
 
 class TestSearchPage:
-    _page = str(_pages_dir() / "2_🔍_Search.py")
+    _page = str(_pages_dir() / "2_Search.py")
 
     def test_search_page_loads(self) -> None:
         at = AppTest.from_file(self._page)
@@ -174,7 +174,7 @@ class TestSearchPage:
 
 
 class TestReviewQueuePage:
-    _page = str(_pages_dir() / "3_✅_Review_Queue.py")
+    _page = str(_pages_dir() / "3_Review_Queue.py")
 
     def test_review_queue_loads_empty(self) -> None:
         at = AppTest.from_file(self._page)
@@ -214,7 +214,7 @@ class TestReviewQueuePage:
 
 
 class TestSchemaProposalsPage:
-    _page = str(_pages_dir() / "4_🏛_Schema_Proposals.py")
+    _page = str(_pages_dir() / "4_Schema_Proposals.py")
 
     def test_schema_proposals_page_loads_empty(self) -> None:
         at = AppTest.from_file(self._page)
@@ -247,7 +247,7 @@ class TestSchemaProposalsPage:
 
 
 class TestAnalyticsPage:
-    _page = str(_pages_dir() / "5_📊_Analytics.py")
+    _page = str(_pages_dir() / "5_Analytics.py")
 
     def test_analytics_page_loads(self) -> None:
         at = AppTest.from_file(self._page)
@@ -290,7 +290,7 @@ class TestAnalyticsPage:
 
 
 class TestKnowledgeMapPage:
-    _page = str(_pages_dir() / "6_🗺_Knowledge_Map.py")
+    _page = str(_pages_dir() / "6_Knowledge_Map.py")
 
     def test_knowledge_map_loads_empty(self) -> None:
         at = AppTest.from_file(self._page)

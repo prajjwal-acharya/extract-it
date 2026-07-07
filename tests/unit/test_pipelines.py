@@ -292,11 +292,11 @@ def test_route_after_executor_none_decision_goes_to_hitl() -> None:
     assert route_after_executor(state) == "op_b_hitl"
 
 
-def test_route_after_hitl_rejection_goes_to_persist() -> None:
+def test_route_after_hitl_always_goes_to_normalize() -> None:
     from pipelines.router import route_after_hitl
 
     rejected: GraphState = {"hitl_approved": False}  # type: ignore[typeddict-item]
-    assert route_after_hitl(rejected) == "persist"
+    assert route_after_hitl(rejected) == "normalize"
 
     approved: GraphState = {"hitl_approved": True}  # type: ignore[typeddict-item]
     assert route_after_hitl(approved) == "normalize"

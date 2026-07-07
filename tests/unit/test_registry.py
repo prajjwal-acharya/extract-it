@@ -79,6 +79,8 @@ def test_registry_all_contains_every_type() -> None:
         "itr",
         "gst_invoice",
         "property_deed",
+        "aadhaar",
+        "driving_license",
         "UNKNOWN",
     }
 
