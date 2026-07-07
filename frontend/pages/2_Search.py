@@ -13,7 +13,16 @@ st.set_page_config(page_title="Search · Doc Intel", layout="wide")
 st.title("Semantic Search")
 st.caption("Find documents by meaning, not just keywords — powered by pgvector cosine similarity")
 
-_DOC_TYPES = ["", "passport", "bank_statement", "driving_license", "salary_slip", "itr", "gst_invoice", "property_deed"]
+_DOC_TYPES = [
+    "",
+    "passport",
+    "bank_statement",
+    "driving_license",
+    "salary_slip",
+    "itr",
+    "gst_invoice",
+    "property_deed",
+]
 
 with st.form("search_form"):
     query = st.text_input("Query", placeholder="e.g. passport issued in 2023 with MRZ data")

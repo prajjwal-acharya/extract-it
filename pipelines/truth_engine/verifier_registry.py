@@ -77,8 +77,16 @@ def _extract_balance_args(fields: dict) -> dict | None:
     Fallback: sum debit/credit amounts (or single `amount` field) when no running
     balance column is present.
     """
-    opening = fields.get("opening_balance") if fields.get("opening_balance") is not None else fields.get("opening")
-    closing = fields.get("closing_balance") if fields.get("closing_balance") is not None else fields.get("closing")
+    opening = (
+        fields.get("opening_balance")
+        if fields.get("opening_balance") is not None
+        else fields.get("opening")
+    )
+    closing = (
+        fields.get("closing_balance")
+        if fields.get("closing_balance") is not None
+        else fields.get("closing")
+    )
     if opening is None or closing is None:
         return None
     raw = fields.get("transactions") or []
@@ -92,7 +100,11 @@ def _extract_balance_args(fields: dict) -> dict | None:
 
         if last_balance is not None:
             # Verify last running balance == closing_balance (skip transaction sum entirely).
-            return {"opening": float(opening), "closing": float(closing), "transactions": [last_balance - float(opening)]}
+            return {
+                "opening": float(opening),
+                "closing": float(closing),
+                "transactions": [last_balance - float(opening)],
+            }
 
         # Fallback: sum signed amounts, skipping rows where only a running balance exists.
         amounts: list[float] = []

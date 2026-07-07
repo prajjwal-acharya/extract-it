@@ -59,13 +59,25 @@ def _recover_stranded_documents() -> None:
     from db.session import session_scope
     from pipelines.graph import get_graph
 
-    _IN_PROGRESS_PHASES = {"ingested", "classifying", "extracting", "evaluating", "planning", "executing", "retrying", "normalizing", "finalizing"}
+    _IN_PROGRESS_PHASES = {
+        "ingested",
+        "classifying",
+        "extracting",
+        "evaluating",
+        "planning",
+        "executing",
+        "retrying",
+        "normalizing",
+        "finalizing",
+    }
 
     # Wait up to 30s for migrations to have created the documents table.
     import time
+
     for _ in range(6):
         try:
             from sqlalchemy import text
+
             with session_scope() as session:
                 session.execute(text("SELECT 1 FROM documents LIMIT 1"))
             break
@@ -126,6 +138,7 @@ async def lifespan(app):  # type: ignore[type-arg]
     # before recovery threads start — prevents concurrent setup() deadlocks
     # when multiple hot-reload processes each try to CREATE INDEX CONCURRENTLY.
     from db.checkpointer import get_checkpointer
+
     get_checkpointer()
     _recover_stranded_documents()
     try:

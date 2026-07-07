@@ -4,14 +4,17 @@ import streamlit as st
 
 st.set_page_config(page_title="Doc Intel Platform", layout="wide", initial_sidebar_state="expanded")
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 [data-testid="stSidebar"] { background-color: #0f1117; }
 h1 { font-weight: 600; letter-spacing: -0.5px; }
 h2, h3 { font-weight: 500; }
 .stMetric label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 pg = st.navigation(
     {

@@ -49,6 +49,7 @@ def _compress_image(data: bytes, mime_type: str) -> tuple[bytes, str]:
 
     return compressed, "image/jpeg"
 
+
 _RETRYABLE = (
     ssl.SSLError,
     TimeoutError,
@@ -67,15 +68,27 @@ def _with_retry(fn):
         except _RETRYABLE:
             if attempt == _MAX_RETRIES:
                 raise
-            time.sleep(_BACKOFF_BASE ** attempt)
+            time.sleep(_BACKOFF_BASE**attempt)
             continue
         except Exception as exc:
             # also retry on google-genai server errors (5xx)
             msg = str(exc).lower()
-            if any(t in msg for t in ("503", "500", "internal", "unavailable", "bad record mac", "server disconnected", "disconnected without sending", "empty response from model")):
+            if any(
+                t in msg
+                for t in (
+                    "503",
+                    "500",
+                    "internal",
+                    "unavailable",
+                    "bad record mac",
+                    "server disconnected",
+                    "disconnected without sending",
+                    "empty response from model",
+                )
+            ):
                 if attempt == _MAX_RETRIES:
                     raise
-                time.sleep(_BACKOFF_BASE ** attempt)
+                time.sleep(_BACKOFF_BASE**attempt)
                 continue
             raise
 
@@ -122,11 +135,13 @@ def generate(
             response_schema=response_schema,
         )
 
-    response = _with_retry(lambda: _client().models.generate_content(
-        model=model or settings.GEMINI_MODEL,
-        contents=contents,
-        config=config,
-    ))
+    response = _with_retry(
+        lambda: _client().models.generate_content(
+            model=model or settings.GEMINI_MODEL,
+            contents=contents,
+            config=config,
+        )
+    )
     text = response.text
     if not text:
         raise RuntimeError("empty response from model")
@@ -154,11 +169,13 @@ def generate_with_tools(
 
     for _ in range(max_tool_calls + 1):
         _contents = contents  # capture for lambda
-        response = _with_retry(lambda: _client().models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=_contents,
-            config=types.GenerateContentConfig(tools=[tool]),
-        ))
+        response = _with_retry(
+            lambda: _client().models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=_contents,
+                config=types.GenerateContentConfig(tools=[tool]),
+            )
+        )
         candidate = response.candidates[0] if response.candidates else None
         if candidate is None:
             break
@@ -197,14 +214,16 @@ def embed(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
     gemini-embedding-001 defaults to 3072 dims and is NOT normalized below
     that default — must normalize manually for correct cosine similarity.
     """
-    response = _with_retry(lambda: _client().models.embed_content(
-        model=settings.GEMINI_EMBEDDING_MODEL,
-        contents=text,
-        config=types.EmbedContentConfig(
-            output_dimensionality=settings.EMBEDDING_DIMENSIONS,
-            task_type=task_type,
-        ),
-    ))
+    response = _with_retry(
+        lambda: _client().models.embed_content(
+            model=settings.GEMINI_EMBEDDING_MODEL,
+            contents=text,
+            config=types.EmbedContentConfig(
+                output_dimensionality=settings.EMBEDDING_DIMENSIONS,
+                task_type=task_type,
+            ),
+        )
+    )
     embeddings = response.embeddings or []
     vec = np.array(embeddings[0].values)
     norm = np.linalg.norm(vec)

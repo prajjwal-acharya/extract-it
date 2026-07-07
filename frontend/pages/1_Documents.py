@@ -23,7 +23,16 @@ STATUSES = [
     "persist_failed",
     "verification_failed",
 ]
-DOC_TYPES = ["", "passport", "bank_statement", "driving_license", "salary_slip", "itr", "gst_invoice", "property_deed"]
+DOC_TYPES = [
+    "",
+    "passport",
+    "bank_statement",
+    "driving_license",
+    "salary_slip",
+    "itr",
+    "gst_invoice",
+    "property_deed",
+]
 
 col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
 status_filter = col1.selectbox("Status", STATUSES)
@@ -137,7 +146,9 @@ with tab_overview:
                             f"{icon} **{vr['verifier_name']}** — score `{vr.get('confidence', 0):.2f}`"
                         )
                 if truth.get("required_fields_missing"):
-                    st.warning(f"Missing required fields: {', '.join(truth['required_fields_missing'])}")
+                    st.warning(
+                        f"Missing required fields: {', '.join(truth['required_fields_missing'])}"
+                    )
                 if truth.get("additional_fields"):
                     st.info(f"Additional fields found: {', '.join(truth['additional_fields'])}")
 
@@ -154,7 +165,9 @@ with tab_overview:
             with st.expander("Learning decision"):
                 cols = st.columns(2)
                 cols[0].metric("Allow learning", "Yes" if learning.get("allow_learning") else "No")
-                cols[1].metric("Schema candidate", "Yes" if learning.get("schema_candidate") else "No")
+                cols[1].metric(
+                    "Schema candidate", "Yes" if learning.get("schema_candidate") else "No"
+                )
                 st.caption(learning.get("reason") or "")
                 if learning.get("schema_proposal"):
                     st.json(learning["schema_proposal"])
@@ -195,7 +208,9 @@ with tab_timeline:
                 {
                     "Event": ev.get("event", ""),
                     "Timestamp": ev.get("timestamp") or "—",
-                    "Confidence": f"{ev['confidence']:.3f}" if ev.get("confidence") is not None else "—",
+                    "Confidence": f"{ev['confidence']:.3f}"
+                    if ev.get("confidence") is not None
+                    else "—",
                     "Duration ms": ev.get("duration_ms"),
                     "Strategy": ev.get("strategy") or "—",
                     "Reason": (ev.get("reason") or "")[:80],

@@ -24,7 +24,9 @@ def upgrade() -> None:
         sa.Column("document_id", sa.String(), sa.ForeignKey("documents.id"), nullable=False),
         sa.Column("resolution_strategy", sa.String(), nullable=True),
         sa.Column("resolution_reason", sa.Text(), nullable=True),
-        sa.Column("resolution_requires_human", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column(
+            "resolution_requires_human", sa.Boolean(), nullable=False, server_default="false"
+        ),
         sa.Column("learning_candidate", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("allow_learning", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("learn_from_document", sa.Boolean(), nullable=False, server_default="false"),

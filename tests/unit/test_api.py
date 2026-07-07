@@ -12,8 +12,12 @@ from api.main import app
 def client(postgres_session):
     """TestClient with DB dependency overridden to use test session."""
     app.dependency_overrides[get_db] = lambda: postgres_session
-    with TestClient(app) as c:
-        yield c
+    with (
+        mock.patch("db.checkpointer.get_checkpointer"),
+        mock.patch("api.main._recover_stranded_documents"),
+    ):
+        with TestClient(app) as c:
+            yield c
     app.dependency_overrides.clear()
 
 

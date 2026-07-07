@@ -83,7 +83,9 @@ class ReviewerPayload:
             confidence_breakdown = {}
 
         if state.get("low_quality_image"):
-            planner_reason = "Image quality gate: blank or solid-color image — no extraction attempted"
+            planner_reason = (
+                "Image quality gate: blank or solid-color image — no extraction attempted"
+            )
         elif resolution_decision is not None:
             planner_reason = resolution_decision.reason
         else:

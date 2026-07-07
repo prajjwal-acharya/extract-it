@@ -71,7 +71,9 @@ for p in proposals:
                         st.error(f"Approval failed: {e}")
 
             st.markdown("---")
-            reject_reason = st.text_input("Rejection reason", key=f"reason_{pid}", placeholder="optional")
+            reject_reason = st.text_input(
+                "Rejection reason", key=f"reason_{pid}", placeholder="optional"
+            )
             if st.button("Reject", key=f"reject_{pid}"):
                 if not reject_reason.strip():
                     st.warning("Please provide a rejection reason.")

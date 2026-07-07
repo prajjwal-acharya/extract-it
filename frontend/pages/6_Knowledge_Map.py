@@ -11,11 +11,19 @@ from api_client import ApiError, client
 
 st.set_page_config(page_title="Knowledge Map · Doc Intel", layout="wide")
 st.title("Knowledge Map")
-st.caption("Documents connected by RAG retrieval usage — actual retrieval events, not synthetic similarity")
+st.caption(
+    "Documents connected by RAG retrieval usage — actual retrieval events, not synthetic similarity"
+)
 
 _DOC_TYPE_COLORS = [
-    "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
-    "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+    "#4e79a7",
+    "#f28e2b",
+    "#e15759",
+    "#76b7b2",
+    "#59a14f",
+    "#edc948",
+    "#b07aa1",
+    "#ff9da7",
 ]
 
 
@@ -72,6 +80,7 @@ try:
 except ImportError:
     st.warning("streamlit-agraph not installed — showing raw data.")
     import pandas as pd  # type: ignore[import-untyped]
+
     col_n, col_e = st.columns(2)
     col_n.subheader("Nodes")
     col_n.dataframe(pd.DataFrame(nodes_data), use_container_width=True)

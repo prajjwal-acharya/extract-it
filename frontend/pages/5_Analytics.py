@@ -61,7 +61,9 @@ if strategy_usage:
     st.subheader("Strategy distribution")
     col_chart, col_table = st.columns([2, 1])
     strategy_df = (
-        pd.DataFrame({"strategy": list(strategy_usage.keys()), "count": list(strategy_usage.values())})
+        pd.DataFrame(
+            {"strategy": list(strategy_usage.keys()), "count": list(strategy_usage.values())}
+        )
         .set_index("strategy")
         .sort_values("count", ascending=False)
     )
@@ -72,7 +74,9 @@ if avg_confidence:
     st.subheader("Average confidence by agent")
     col_conf, col_tbl = st.columns([2, 1])
     conf_df = (
-        pd.DataFrame({"agent": list(avg_confidence.keys()), "avg_score": list(avg_confidence.values())})
+        pd.DataFrame(
+            {"agent": list(avg_confidence.keys()), "avg_score": list(avg_confidence.values())}
+        )
         .set_index("agent")
         .sort_values("avg_score")
     )
@@ -82,7 +86,12 @@ if avg_confidence:
 if verifier_failures:
     st.subheader("Verifier failures")
     vf_df = (
-        pd.DataFrame({"verifier": list(verifier_failures.keys()), "failures": list(verifier_failures.values())})
+        pd.DataFrame(
+            {
+                "verifier": list(verifier_failures.keys()),
+                "failures": list(verifier_failures.values()),
+            }
+        )
         .set_index("verifier")
         .sort_values("failures", ascending=False)
     )
